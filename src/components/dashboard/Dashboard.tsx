@@ -809,6 +809,7 @@ export function Dashboard() {
                     </div>
                     <div className="flex-1 min-h-[420px] relative">
                       <FlightMap
+                        flightId={currentFlightData!.flight.id}
                         track={currentFlightData!.track}
                         homeLat={currentFlightData!.flight.homeLat}
                         homeLon={currentFlightData!.flight.homeLon}

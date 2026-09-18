@@ -948,10 +948,8 @@ impl<'a> LogParser<'a> {
                         _ => {}
                     }
                     
-                    // The dji-log-parser library resets camera state to false on every OSD tick
-                    // because not all OSD ticks have a matching camera record. This causes
-                    // false `is_photo` and `is_video` transitions in the extracted frames.
-                    // We must track the true persistent state out-of-band to override the frames.
+                    // Camera records arrive less often than OSD ticks. Preserve their latest
+                    // state across frames, including photo state which the library resets.
                     let mut persistent_camera_states = Vec::new();
                     let mut current_is_photo = false;
                     let mut current_is_video = false;
@@ -1039,7 +1037,6 @@ impl<'a> LogParser<'a> {
         let mut prev_selected_idx: Option<usize> = None;
 
         let mut prev_is_photo = false;
-        let mut prev_is_video = false;
 
         for tick_idx in 0..frames.len() {
             let current_timestamp_ms = (tick_idx as i64) * fallback_interval_ms;
@@ -1235,17 +1232,17 @@ impl<'a> LogParser<'a> {
             point.rc_throttle = Some(((rc.throttle as f64) - 1024.0) / 1024.0 * 100.0);
             point.rc_rudder = Some(((rc.rudder as f64) - 1024.0) / 1024.0 * 100.0);
 
-            // Camera state: extract rising edge transitions to guarantee exactly one "true" per event
+            // Photos are capture events; video stays true throughout recording so
+            // consumers can detect both start and stop transitions.
             let camera = &frame.camera;
             
             let is_photo_now = camera.is_photo;
             let is_video_now = camera.is_video;
 
             point.is_photo = Some(is_photo_now && !prev_is_photo);
-            point.is_video = Some(is_video_now && !prev_is_video);
+            point.is_video = Some(is_video_now);
 
             prev_is_photo = is_photo_now;
-            prev_is_video = is_video_now;
 
             points.push(point);
         }

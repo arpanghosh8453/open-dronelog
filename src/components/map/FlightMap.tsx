@@ -7,9 +7,11 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Map, { NavigationControl, AttributionControl, Marker, Source, Layer, useControl } from 'react-map-gl/maplibre';
 import type { MapRef } from 'react-map-gl/maplibre';
 import { PathLayer, ScatterplotLayer, TextLayer, IconLayer } from '@deck.gl/layers';
-import { MapboxOverlay } from '@deck.gl/mapbox';
+import { MapLibreOverlay } from '@deck.gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { getTrackCenter, calculateBounds, formatAltitude, formatSpeed, formatDistance } from '@/lib/utils';
+import { getFlightData } from '@/lib/api';
+import { getMediaPoints, type MediaPoint } from '@/lib/mediaMarkers';
 import { useFlightStore } from '@/stores/flightStore';
 import { Select } from '@/components/ui/Select';
 import type { TelemetryData, FlightMessage } from '@/types';
@@ -17,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { type MapType, MAP_TYPE_OPTIONS, getMapStyle } from '@/lib/mapStyles';
 
 interface FlightMapProps {
+  flightId: number;
   track: [number, number, number][]; // [lng, lat, alt][]
   homeLat?: number | null;
   homeLon?: number | null;
@@ -231,7 +234,7 @@ const COLOR_BY_OPTIONS: { value: ColorByMode; labelKey: string }[] = [
 
 // ─── Arrow icon for replay marker ───────────────────────────────────────────
 // Pre-render the arrow onto a canvas so the IconLayer has a synchronous atlas.
-// This avoids async image-loading issues when deck.gl runs inside MapboxOverlay
+// This avoids async image-loading issues when deck.gl runs inside MapLibreOverlay
 // (MapLibre never gets a repaint request after a data-URL finishes loading).
 const ARROW_ATLAS_SIZE = 64;
 const arrowAtlasCanvas: HTMLCanvasElement | null = (() => {
@@ -266,9 +269,7 @@ const ARROW_ICON_MAPPING: Record<string, { x: number; y: number; width: number; 
 };
 
 /**
- * Integrates deck.gl layers into MapLibre's own WebGL context via MapboxOverlay.
- * This avoids creating a second WebGL context which fails on mobile devices
- * due to context limits (especially iOS Safari).
+ * Synchronizes deck.gl layers with MapLibre using its supported overlay integration.
  *
  * Uses interleaved: false (default) so deck.gl renders all layers as an overlay
  * on top of the MapLibre scene. This prevents path segments from clipping against
@@ -277,10 +278,10 @@ const ARROW_ICON_MAPPING: Record<string, { x: number; y: number; width: number; 
 function DeckGLOverlay(props: {
   layers: any[];
   pickingRadius?: number;
-  overlayRef?: React.MutableRefObject<MapboxOverlay | null>;
+  overlayRef?: React.MutableRefObject<MapLibreOverlay | null>;
 }) {
   const { overlayRef, ...overlayProps } = props;
-  const overlay = useControl(() => new MapboxOverlay(overlayProps));
+  const overlay = useControl(() => new MapLibreOverlay(overlayProps));
   overlay.setProps(overlayProps);
   // Expose overlay instance for external picking / snapshot use
   if (overlayRef) overlayRef.current = overlay;
@@ -336,7 +337,7 @@ function RCStickPad({ x, y, label, labelPosition, dotColor, dotGlow }: RCStickPa
   );
 }
 
-export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, themeMode, messages }: FlightMapProps) {
+export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, telemetry, themeMode, messages }: FlightMapProps) {
   const { t } = useTranslation();
   const [viewState, setViewState] = useState({
     longitude: 0,
@@ -385,6 +386,20 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
   });
   const [showAircraft, setShowAircraft] = useState(() => getSessionBool('map:showAircraft', true));
   const [showMedia, setShowMedia] = useState(() => getSessionBool('map:showMedia', false));
+  const [mediaTelemetry, setMediaTelemetry] = useState<{ flightId: number; telemetry: TelemetryData } | null>(null);
+  useEffect(() => {
+    if (!showMedia || mediaTelemetry?.flightId === flightId) return;
+    let cancelled = false;
+    // Display telemetry may be averaged; markers need the original transition coordinates.
+    getFlightData(flightId)
+      .then((data) => {
+        if (!cancelled) setMediaTelemetry({ flightId, telemetry: data.telemetry });
+      })
+      .catch((error) => {
+        if (!cancelled) console.error('Failed to load media marker positions:', error);
+      });
+    return () => { cancelled = true; };
+  }, [flightId, showMedia, mediaTelemetry?.flightId]);
   const [showMessages, setShowMessages] = useState(() => getSessionBool('map:showMessages', true));
   const [tracePath, setTracePath] = useState(() => getSessionBool('map:tracePath', true));
   const [simplified, setSimplified] = useState(() => {
@@ -413,11 +428,22 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
   } | null>(null);
   const { unitPrefs, locale, mapSyncEnabled, setMapReplayProgress } = useFlightStore();
   const mapRef = useRef<MapRef | null>(null);
-  const overlayRef = useRef<MapboxOverlay | null>(null);
+  const overlayRef = useRef<MapLibreOverlay | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [groundElevation, setGroundElevation] = useState(0);
+  const updateGroundElevation = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    const lng = homeLon ?? track[0]?.[0];
+    const lat = homeLat ?? track[0]?.[1];
+    const elevation = is3D && map?.getTerrain() && lng != null && lat != null
+      ? map.queryTerrainElevation([lng, lat])
+      : 0;
+    setGroundElevation(elevation != null && Number.isFinite(elevation) ? elevation : 0);
+  }, [homeLat, homeLon, track, is3D]);
+  useEffect(updateGroundElevation, [updateGroundElevation]);
 
   // Capture map snapshot when requested (for FlyCard export)
-  // MapboxOverlay with interleaved: false renders deck.gl layers on a
+  // MapLibreOverlay with interleaved: false renders deck.gl layers on a
   // separate canvas stacked on top of the MapLibre canvas.  We must
   // composite all canvases inside the map container to include the
   // flight path, markers, etc.
@@ -601,8 +627,8 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
     const lng = pLo[0] + (pHi[0] - pLo[0]) * frac;
     const lat = pLo[1] + (pHi[1] - pLo[1]) * frac;
     const alt = pLo[2] + (pHi[2] - pLo[2]) * frac;
-    return { lng, lat, alt: is3D ? alt : 0 };
-  }, [track, replayProgress, is3D]);
+    return { lng, lat, alt: is3D ? alt + groundElevation : 0 };
+  }, [track, replayProgress, is3D, groundElevation]);
 
   // Sync replay progress to store for chart axis pointer
   useEffect(() => {
@@ -846,7 +872,8 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
   const deckPathData = useMemo(() => {
     if (smoothedTrack.length < 2) return [];
 
-    const toAlt = (altitude: number) => (is3D ? altitude : 0);
+    // Flight heights are relative to takeoff; deck.gl positions are above sea level.
+    const toAlt = (altitude: number) => (is3D ? altitude + groundElevation : 0);
     const n = smoothedTrack.length;
     const rawN = displayedTrack.length;
 
@@ -1101,7 +1128,7 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
     flushBatch();
 
     return segments;
-  }, [is3D, smoothedTrack, displayedTrack, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
+  }, [is3D, groundElevation, smoothedTrack, displayedTrack, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
 
   // ── Simplified 2D: GeoJSON for MapLibre native line layer ──────
   const simplifiedPathGeoJSON = useMemo(() => {
@@ -1181,11 +1208,6 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
   }, [deckPathData, showTooltip, lineThickness, is3D, mapType, simplified]);
 
   // ─── Media markers (photo/video locations) with clustering ────────
-  interface MediaPoint {
-    position: [number, number, number];
-    type: 'photo' | 'videoStart' | 'videoStop';
-  }
-
   interface MediaCluster {
     position: [number, number, number];
     type: 'photo' | 'videoStart' | 'videoStop';
@@ -1194,58 +1216,12 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
 
   // Extract photo and video capture locations from telemetry
   const mediaPoints = useMemo<MediaPoint[]>(() => {
-    if (!telemetry || !showMedia) return [];
-    const points: MediaPoint[] = [];
-    const n = telemetry.time?.length ?? 0;
-
-    // Track previous states to detect transitions (capture moment)
-    let wasPhoto = false;
-    let wasVideo = false;
-
-    for (let i = 0; i < n; i++) {
-      const lat = telemetry.latitude?.[i];
-      const lng = telemetry.longitude?.[i];
-      const height = telemetry.height?.[i] ?? telemetry.altitude?.[i] ?? 0;
-      const isPhoto = telemetry.isPhoto?.[i] === true;
-      const isVideo = telemetry.isVideo?.[i] === true;
-
-      // Skip if no valid coordinates
-      if (lat == null || lng == null || (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001)) {
-        wasPhoto = isPhoto;
-        wasVideo = isVideo;
-        continue;
-      }
-
-      // Detect photo capture (transition to true)
-      if (isPhoto && !wasPhoto) {
-        points.push({
-          position: [lng, lat, is3D ? height : 0],
-          type: 'photo',
-        });
-      }
-
-      // Detect video recording start (transition to true)
-      if (isVideo && !wasVideo) {
-        points.push({
-          position: [lng, lat, is3D ? height : 0],
-          type: 'videoStart',
-        });
-      }
-
-      // Detect video recording stop (transition to false)
-      if (!isVideo && wasVideo) {
-        points.push({
-          position: [lng, lat, is3D ? height : 0],
-          type: 'videoStop',
-        });
-      }
-
-      wasPhoto = isPhoto;
-      wasVideo = isVideo;
-    }
-
-    return points;
-  }, [telemetry, showMedia, is3D]);
+    if (!showMedia || mediaTelemetry?.flightId !== flightId) return [];
+    return getMediaPoints(mediaTelemetry.telemetry, is3D).map((point) => ({
+      ...point,
+      position: [point.position[0], point.position[1], point.position[2] + (is3D ? groundElevation : 0)] as [number, number, number],
+    }));
+  }, [flightId, mediaTelemetry, showMedia, is3D, groundElevation]);
 
   // Cluster points within 0.5 meters of each other
   // For mixed types at same location, create separate markers for each type
@@ -1645,9 +1621,11 @@ export function FlightMap({ track, homeLat, homeLon, durationSecs, telemetry, th
         style={{ width: '100%', height: '100%', position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' }}
         mapStyle={activeMapStyle}
         attributionControl={false}
-        preserveDrawingBuffer={true}
+        canvasContextAttributes={{ preserveDrawingBuffer: true }}
         ref={mapRef}
         onMove={handleMapMove}
+        onSourceData={updateGroundElevation}
+        onIdle={updateGroundElevation}
         onLoad={() => {
           if (is3D) {
             enableTerrain();

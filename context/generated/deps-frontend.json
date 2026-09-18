@@ -1,10 +1,10 @@
 {
-  "sourceFingerprint": "3d0e49d8530eeab31f2853b049b15e08ea7a3062c708a4ce0fc9805d3f066cac",
+  "sourceFingerprint": "ace255e90aacebc0a27c2d3a33425886222888b06db21909a6b3d7d96e5b9088",
   "packageName": "open-dronelog",
   "projectVersion": "3.3.0",
   "dependencies": [
     "@deck.gl/layers",
-    "@deck.gl/mapbox",
+    "@deck.gl/maplibre",
     "@tauri-apps/api",
     "@tauri-apps/plugin-dialog",
     "@tauri-apps/plugin-fs",
