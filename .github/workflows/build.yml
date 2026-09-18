@@ -56,8 +56,6 @@ jobs:
       id-token: write
       contents: write
       actions: read
-    env:
-      CL: ${{ runner.os == 'Windows' && '/std:c++17 /EHsc' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -125,6 +123,8 @@ jobs:
       - name: Build Windows Tauri app (no release upload)
         if: runner.os == 'Windows'
         shell: bash
+        env:
+          CL: /std:c++17 /EHsc
         run: |
           set -euo pipefail
           # Start from a clean workspace so collected artifacts are from this run only.
