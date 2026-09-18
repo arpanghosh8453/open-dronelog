@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Open DroneLog — A high-performance drone flight log analyzer"
 authors = ["Open DroneLog Contributors"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.85"
 license = "AGPL-3.0-only"
 
 [lib]

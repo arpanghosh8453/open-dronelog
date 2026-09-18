@@ -104,7 +104,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.81.0
           targets: ${{ matrix.target }}
 
       - name: Build Tauri app
@@ -205,7 +204,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Sign .exe with SignPath
+      - name: Submit .exe to SignPath and wait for approval
         if: runner.os == 'Windows' && needs.resolve-tag.outputs.sign_windows == 'true'
         id: sign-exe
         uses: signpath/github-action-submit-signing-request@v2
@@ -217,9 +216,10 @@ jobs:
           artifact-configuration-slug: '${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}'
           github-artifact-id: '${{ steps.upload-exe.outputs.artifact-id }}'
           wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 18000
           output-artifact-directory: 'signed/exe'
 
-      - name: Sign .msi with SignPath
+      - name: Submit .msi to SignPath and wait for approval
         if: runner.os == 'Windows' && needs.resolve-tag.outputs.sign_windows == 'true'
         id: sign-msi
         uses: signpath/github-action-submit-signing-request@v2
@@ -231,6 +231,7 @@ jobs:
           artifact-configuration-slug: '${{ secrets.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}'
           github-artifact-id: '${{ steps.upload-msi.outputs.artifact-id }}'
           wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 18000
           output-artifact-directory: 'signed/msi'
 
       - name: Prepare Windows release assets
