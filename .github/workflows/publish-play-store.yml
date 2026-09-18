@@ -76,6 +76,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Override v3's default, which includes the removed SDK 'tools' package.
+          packages: 'platform-tools'
 
       - name: Setup Rust targets
         uses: dtolnay/rust-toolchain@stable
