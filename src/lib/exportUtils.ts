@@ -402,7 +402,7 @@ export function buildGpx(data: FlightDataResponse): string {
       const timeStr = flight.startTime ? `<time>${new Date(flight.startTime).toISOString()}</time>` : '';
       const eleStr = flight.maxAltitude != null ? `<ele>${flight.maxAltitude}</ele>` : '';
       return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Open DroneLog">
+<gpx version="1.1" creator="Open DroneLog" xmlns="http://www.topografix.com/GPX/1/1">
   <wpt lat="${flight.homeLat}" lon="${flight.homeLon}">
     <name>${flightName}</name>
     ${eleStr}
@@ -412,7 +412,7 @@ export function buildGpx(data: FlightDataResponse): string {
     }
     // No location data at all
     return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Open DroneLog">
+<gpx version="1.1" creator="Open DroneLog" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${flightName}</name>
   </metadata>
@@ -441,7 +441,7 @@ export function buildGpx(data: FlightDataResponse): string {
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Open DroneLog">
+<gpx version="1.1" creator="Open DroneLog" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
     <name>${flightName}</name>
     <trkseg>
