@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/Select';
 import type { TelemetryData, FlightMessage } from '@/types';
 import { useTranslation } from 'react-i18next';
 import { type MapType, MAP_TYPE_OPTIONS, getMapStyle } from '@/lib/mapStyles';
+import { finiteValueRange, flightProgressForPathIndex, mapTelemetrySeriesToPath } from '@/lib/pathTelemetry';
 
 interface FlightMapProps {
   flightId: number;
@@ -876,6 +877,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     const toAlt = (altitude: number) => (is3D ? altitude + groundElevation : 0);
     const n = smoothedTrack.length;
     const rawN = displayedTrack.length;
+    const fullRawN = track.length;
 
     // ── Simplified: single multi-point path with solid color ──────
     // This reduces GPU draw calls from thousands to 1, which is
@@ -898,43 +900,21 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     }
 
     // ── Desktop: per-segment gradient coloring ────────────────────
-    const telemetryN = telemetry?.isVideo?.length ?? 0;
-
     // Pre-compute per-point values depending on colorBy mode
     let values: number[] | null = null;
     let nullableValues: (number | null)[] | null = null;
     let minVal = 0;
     let maxVal = 1;
 
-    // For video segment mode, map telemetry isVideo to smoothed track indices
-    // The track is derived from telemetry (filtered/downsampled), so we map through telemetry length
-    let isVideoAtIndex: boolean[] | null = null;
-    if (colorBy === 'videoSegment' && telemetry?.isVideo && telemetryN > 0) {
-      isVideoAtIndex = [];
-      for (let i = 0; i < n; i++) {
-        // Map smoothed point → raw track index → telemetry index
-        const rawTrackIndex = Math.round((i / Math.max(1, n - 1)) * Math.max(1, rawN - 1));
-        const telemetryIndex = Math.round((rawTrackIndex / Math.max(1, rawN - 1)) * Math.max(1, telemetryN - 1));
-        const isRecording = telemetry.isVideo[telemetryIndex] === true;
-        isVideoAtIndex.push(isRecording);
-      }
-    }
+    const mapSeriesToVisiblePath = <T,>(series?: readonly T[]): (T | null)[] =>
+      mapTelemetrySeriesToPath(series, n, rawN, fullRawN);
 
-    const mapTelemetrySeriesToPath = (series?: (number | null)[]): (number | null)[] => {
-      const telemetryLen = series?.length ?? 0;
-      if (!series || telemetryLen === 0) return new Array(n).fill(null);
-      const mapped: (number | null)[] = [];
-      for (let i = 0; i < n; i++) {
-        const rawTrackIndex = Math.round((i / Math.max(1, n - 1)) * Math.max(1, rawN - 1));
-        const telemetryIndex = Math.round((rawTrackIndex / Math.max(1, rawN - 1)) * Math.max(1, telemetryLen - 1));
-        mapped.push(series[telemetryIndex] ?? null);
-      }
-      return mapped;
-    };
-
-    const batteryAtIndex = mapTelemetrySeriesToPath(telemetry?.battery);
-    const telemetrySpeedAtIndex = mapTelemetrySeriesToPath(telemetry?.speed);
-    const rcSignalAtIndex = mapTelemetrySeriesToPath(telemetry?.rcSignal).map((v) => (v === 0 ? null : v));
+    const isVideoAtIndex = colorBy === 'videoSegment'
+      ? mapSeriesToVisiblePath(telemetry?.isVideo).map((value) => value === true)
+      : null;
+    const batteryAtIndex = mapSeriesToVisiblePath(telemetry?.battery);
+    const telemetrySpeedAtIndex = mapSeriesToVisiblePath(telemetry?.speed);
+    const rcSignalAtIndex = mapSeriesToVisiblePath(telemetry?.rcSignal).map((v) => (v === 0 ? null : v));
     const rcSignalNearestAtIndex = [...rcSignalAtIndex];
     let lastRcSignal: number | null = null;
     for (let i = 0; i < rcSignalNearestAtIndex.length; i++) {
@@ -954,21 +934,19 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
         rcSignalNearestAtIndex[i] = nextRcSignal;
       }
     }
-    const satelliteCountAtIndex = mapTelemetrySeriesToPath(telemetry?.satellites);
+    const satelliteCountAtIndex = mapSeriesToVisiblePath(telemetry?.satellites);
 
     if (colorBy === 'height') {
       values = smoothedTrack.map((p) => p[2]);
-      minVal = values[0] ?? 0;
-      maxVal = values[0] ?? 0;
-      for (let i = 1; i < values.length; i++) {
-        if (values[i] < minVal) minVal = values[i];
-        if (values[i] > maxVal) maxVal = values[i];
-      }
+      [minVal, maxVal] = finiteValueRange(track.map((point) => point[2]));
     } else if (colorBy === 'speed') {
       // Speed telemetry is stored in m/s; prefer it for accurate color mapping.
       // Fall back to distance/time estimation when telemetry speed is unavailable.
-      const fallbackStepSecs = durationSecs && durationSecs > 0 && n > 1
-        ? durationSecs / (n - 1)
+      const visibleDurationSecs = durationSecs && durationSecs > 0 && fullRawN > 1
+        ? durationSecs * (rawN - 1) / (fullRawN - 1)
+        : null;
+      const fallbackStepSecs = visibleDurationSecs && n > 1
+        ? visibleDurationSecs / (n - 1)
         : null;
       values = new Array(n).fill(0);
       for (let i = 0; i < n; i++) {
@@ -987,22 +965,26 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
         );
         values[i] = d / fallbackStepSecs;
       }
-      minVal = values[0] ?? 0;
-      maxVal = values[0] ?? 0;
-      for (let i = 1; i < values.length; i++) {
-        if (values[i] < minVal) minVal = values[i];
-        if (values[i] > maxVal) maxVal = values[i];
+      const fullTelemetrySpeeds = telemetry?.speed ?? [];
+      if (fullTelemetrySpeeds.some((value) => value !== null && Number.isFinite(value))) {
+        [minVal, maxVal] = finiteValueRange(fullTelemetrySpeeds);
+      } else {
+        const fullFallbackStepSecs = durationSecs && durationSecs > 0 && fullRawN > 1
+          ? durationSecs / (fullRawN - 1)
+          : null;
+        const fullFallbackSpeeds = track.map((point, index) => {
+          if (index === 0 || !fullFallbackStepSecs) return 0;
+          const previous = track[index - 1];
+          return haversineM(previous[1], previous[0], point[1], point[0]) / fullFallbackStepSecs;
+        });
+        [minVal, maxVal] = finiteValueRange(fullFallbackSpeeds);
       }
     } else if (colorBy === 'distance') {
       const hLat = homeLat ?? smoothedTrack[0]?.[1] ?? 0;
       const hLon = homeLon ?? smoothedTrack[0]?.[0] ?? 0;
       values = smoothedTrack.map((p) => haversineM(hLat, hLon, p[1], p[0]));
-      minVal = values[0] ?? 0;
-      maxVal = values[0] ?? 0;
-      for (let i = 1; i < values.length; i++) {
-        if (values[i] < minVal) minVal = values[i];
-        if (values[i] > maxVal) maxVal = values[i];
-      }
+      const fullDistances = track.map((p) => haversineM(hLat, hLon, p[1], p[0]));
+      [minVal, maxVal] = finiteValueRange(fullDistances);
     } else if (colorBy === 'batteryPercent') {
       values = batteryAtIndex.map((v) => v ?? 0);
       minVal = 0;
@@ -1034,8 +1016,11 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     const ramp = getRamp();
 
     // Pre-compute per-point speed (m/s) and distance for tooltip.
-    const fallbackStepSecs = durationSecs && durationSecs > 0 && n > 1
-      ? durationSecs / (n - 1)
+    const visibleDurationSecs = durationSecs && durationSecs > 0 && fullRawN > 1
+      ? durationSecs * (rawN - 1) / (fullRawN - 1)
+      : null;
+    const fallbackStepSecs = visibleDurationSecs && n > 1
+      ? visibleDurationSecs / (n - 1)
       : null;
     const speeds: number[] = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
@@ -1094,7 +1079,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
         const value = isRcSignalMode ? (nullableValues?.[i] ?? null) : (values?.[i] ?? null);
         const t = value !== null
           ? (value - minVal) / range
-          : (isRcSignalMode ? 0.5 : i / Math.max(1, n - 2));
+          : (isRcSignalMode ? 0.5 : flightProgressForPathIndex(i, n, rawN, fullRawN));
         color = valueToColor(t, ramp);
       }
 
@@ -1116,7 +1101,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
           height: alt1,
           speed: speeds[i],
           distance: distances[i],
-          progress: i / Math.max(1, n - 2),
+          progress: flightProgressForPathIndex(i, n, rawN, fullRawN),
           lat: lat1,
           lng: lng1,
           battery: batteryAtIndex[i],
@@ -1128,7 +1113,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     flushBatch();
 
     return segments;
-  }, [is3D, groundElevation, smoothedTrack, displayedTrack, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
+  }, [is3D, groundElevation, smoothedTrack, displayedTrack, track, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
 
   // ── Simplified 2D: GeoJSON for MapLibre native line layer ──────
   const simplifiedPathGeoJSON = useMemo(() => {
