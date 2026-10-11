@@ -4,7 +4,7 @@
 //! allowing the frontend to communicate via fetch() instead of invoke().
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::{
@@ -201,14 +201,15 @@ fn has_allowed_extension(file_name: &str, allowed_extensions: &std::collections:
 }
 
 /// Copy uploaded file to the keep folder with hash-based deduplication (web mode)
-fn copy_uploaded_file_web(src_path: &std::path::PathBuf, dest_folder: &std::path::PathBuf, file_hash: Option<&str>) -> Result<(), String> {
+fn copy_uploaded_file_web(
+    src_path: &std::path::PathBuf,
+    dest_folder: &std::path::PathBuf,
+    file_name: &str,
+    file_hash: Option<&str>,
+) -> Result<(), String> {
     // Create the destination folder if it doesn't exist
     std::fs::create_dir_all(dest_folder)
         .map_err(|e| format!("Failed to create uploaded files folder: {}", e))?;
-    
-    let file_name = src_path.file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("Invalid file name")?;
     
     let dest_path = dest_folder.join(file_name);
     
@@ -233,10 +234,10 @@ fn copy_uploaded_file_web(src_path: &std::path::PathBuf, dest_folder: &std::path
         }
         
         // Hashes don't match - save with hash suffix
-        let stem = src_path.file_stem()
+        let stem = Path::new(file_name).file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("file");
-        let extension = src_path.extension()
+        let extension = Path::new(file_name).extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
         
@@ -282,6 +283,12 @@ async fn import_log(
         .file_name()
         .unwrap_or("unknown.txt")
         .to_string();
+    let safe_name = Path::new(&file_name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or("upload.log")
+        .to_string();
     let data = field
         .bytes()
         .await
@@ -292,7 +299,7 @@ async fn import_log(
     std::fs::create_dir_all(&temp_dir)
         .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create temp dir: {}", e)))?;
 
-    let temp_path = temp_dir.join(&file_name);
+    let temp_path = temp_dir.join(format!("{}-{}", uuid::Uuid::new_v4(), safe_name));
     std::fs::write(&temp_path, &data)
         .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write temp file: {}", e)))?;
     // Release multipart payload bytes before parse/import work starts.
@@ -325,7 +332,7 @@ async fn import_log(
     // Helper to copy uploaded file if setting is enabled
     let try_copy_file = |file_hash: Option<&str>| {
         if keep_enabled {
-            if let Err(e) = copy_uploaded_file_web(&temp_path, &upload_folder, file_hash) {
+            if let Err(e) = copy_uploaded_file_web(&temp_path, &upload_folder, &safe_name, file_hash) {
                 log::warn!("Failed to copy uploaded file: {}", e);
             }
         }
