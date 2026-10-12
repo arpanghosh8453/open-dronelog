@@ -4,7 +4,7 @@
 //! allowing the frontend to communicate via fetch() instead of invoke().
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{Path as FsPath, PathBuf};
 use std::sync::Arc;
 
 use axum::{
@@ -234,10 +234,10 @@ fn copy_uploaded_file_web(
         }
         
         // Hashes don't match - save with hash suffix
-        let stem = Path::new(file_name).file_stem()
+        let stem = FsPath::new(file_name).file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("file");
-        let extension = Path::new(file_name).extension()
+        let extension = FsPath::new(file_name).extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
         
@@ -283,7 +283,7 @@ async fn import_log(
         .file_name()
         .unwrap_or("unknown.txt")
         .to_string();
-    let safe_name = Path::new(&file_name)
+    let safe_name = FsPath::new(&file_name)
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|n| !n.trim().is_empty())
