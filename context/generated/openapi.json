@@ -4,7 +4,7 @@
     "title": "Open DroneLog Generated API Surface",
     "version": "generated",
     "description": "Generated from src-tauri/src/server.rs router declarations.",
-    "x-source-fingerprint": "d5e6ea92258779cee4515a28b63e28be7257d175abbf434f0a41634e77bbfedd"
+    "x-source-fingerprint": "c1030c4f42c84a2641f2caaec2003bb9b6212badc5aa6aee19773dae42c7fe4a"
   },
   "paths": {
     "/api/import": {

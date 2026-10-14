@@ -1237,7 +1237,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-64${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-64 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={altitudeSpeedOption}
             style={{ height: '100%', width: '100%' }}
@@ -1260,7 +1260,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-60${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-60 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={batteryOption}
             style={{ height: '100%', width: '100%' }}
@@ -1284,7 +1284,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
             onFieldColorChange={setTelemetryColor}
             onFieldColorReset={resetTelemetryColor}
           />
-          <div className={`h-52${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+          <div className={`h-52 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
             <ReactECharts
               option={cellVoltageOption}
               style={{ height: '100%', width: '100%' }}
@@ -1309,7 +1309,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
             onFieldColorChange={setTelemetryColor}
             onFieldColorReset={resetTelemetryColor}
           />
-          <div className={`h-52${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+          <div className={`h-52 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
             <ReactECharts
               option={batteryCapacityOption}
               style={{ height: '100%', width: '100%' }}
@@ -1333,7 +1333,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-64${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-64 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={attitudeOption}
             style={{ height: '100%', width: '100%' }}
@@ -1356,7 +1356,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-64${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-64 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={gimbalOption}
             style={{ height: '100%', width: '100%' }}
@@ -1379,7 +1379,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-40${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-40 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={rcSignalOption}
             style={{ height: '100%', width: '100%' }}
@@ -1402,7 +1402,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-52${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-52 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={distanceToHomeOption}
             style={{ height: '100%', width: '100%' }}
@@ -1425,7 +1425,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-52${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-52 ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={velocityOption}
             style={{ height: '100%', width: '100%' }}
@@ -1448,7 +1448,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
           onFieldColorChange={setTelemetryColor}
           onFieldColorReset={resetTelemetryColor}
         />
-        <div className={`h-[207px]${mapSyncEnabled ? ' pointer-events-none' : ''}`}>
+        <div className={`h-[207px] ${mapSyncEnabled ? 'pointer-events-none' : ''}`}>
           <ReactECharts
             option={gpsOption}
             style={{ height: '100%', width: '100%' }}

@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 :root {
   --drone-primary: 0 160 220;
@@ -585,7 +584,16 @@ body.overlay-active .settings-scroll {
   }
 
   .stat-card {
-    @apply card p-4 flex flex-col gap-1 items-center text-center;
+    background-color: rgb(var(--drone-surface));
+    border-radius: 0.75rem;
+    border: 1px solid rgba(107, 114, 128, 0.5);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: center;
+    text-align: center;
   }
 
   .stat-value {

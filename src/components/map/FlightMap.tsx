@@ -6,6 +6,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Map, { NavigationControl, AttributionControl, Marker, Source, Layer, useControl } from 'react-map-gl/maplibre';
 import type { MapRef } from 'react-map-gl/maplibre';
+import type { RasterDEMSourceSpecification } from 'maplibre-gl';
 import { PathLayer, ScatterplotLayer, TextLayer, IconLayer } from '@deck.gl/layers';
 import { MapLibreOverlay } from '@deck.gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -40,12 +41,17 @@ type ColorByMode =
   | 'satelliteCount';
 
 const TERRAIN_SOURCE_ID = 'terrain-dem';
-const TERRAIN_SOURCE = {
+const TERRAIN_SOURCE: RasterDEMSourceSpecification = {
   type: 'raster-dem',
-  url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+  tiles: [
+    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+  ],
   tileSize: 256,
-  maxzoom: 12,
-} as const;
+  maxzoom: 15,
+  encoding: 'terrarium',
+  attribution: '<a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener noreferrer">Terrain Tiles</a>',
+};
+const TERRAIN_PROFILE_MAX_SAMPLES = 1000;
 
 const getSessionBool = (key: string, fallback: boolean) => {
   if (typeof window === 'undefined') return fallback;
@@ -148,6 +154,22 @@ function downsample(
   }
   result.push(points[points.length - 1]);
   return result;
+}
+
+/** Interpolate the sampled terrain height at a normalized point along the flight. */
+function terrainElevationAt(
+  profile: number[],
+  progress: number,
+  fallback: number,
+): number {
+  if (profile.length === 0) return fallback;
+  if (profile.length === 1) return profile[0];
+
+  const index = Math.max(0, Math.min(1, progress)) * (profile.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.min(lower + 1, profile.length - 1);
+  const fraction = index - lower;
+  return profile[lower] + (profile[upper] - profile[lower]) * fraction;
 }
 
 // ─── Haversine distance in meters ───────────────────────────────────────────
@@ -431,6 +453,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
   const overlayRef = useRef<MapLibreOverlay | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [groundElevation, setGroundElevation] = useState(0);
+  const [terrainElevationProfile, setTerrainElevationProfile] = useState<number[]>([]);
   const updateGroundElevation = useCallback(() => {
     const map = mapRef.current?.getMap();
     const lng = homeLon ?? track[0]?.[0];
@@ -441,6 +464,49 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     setGroundElevation(elevation != null && Number.isFinite(elevation) ? elevation : 0);
   }, [homeLat, homeLon, track, is3D]);
   useEffect(updateGroundElevation, [updateGroundElevation]);
+
+  const updateTerrainElevationProfile = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!is3D || !map?.getTerrain() || track.length === 0) {
+      setTerrainElevationProfile((current) => current.length === 0 ? current : []);
+      return;
+    }
+
+    // Sampling keeps idle updates inexpensive while retaining the exact first
+    // and last terrain heights. Rendered points interpolate between samples.
+    const sampleCount = Math.min(track.length, TERRAIN_PROFILE_MAX_SAMPLES);
+    const sampled: (number | null)[] = new Array(sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+      const trackIndex = sampleCount === 1
+        ? 0
+        : Math.round((i / (sampleCount - 1)) * (track.length - 1));
+      const point = track[trackIndex];
+      const elevation = map.queryTerrainElevation([point[0], point[1]]);
+      sampled[i] = elevation != null && Number.isFinite(elevation) ? elevation : null;
+    }
+
+    // DEM tiles can finish at slightly different times. Fill temporary gaps
+    // with the nearest available sample until the next idle event refreshes it.
+    let nearest = sampled.find((elevation): elevation is number => elevation != null)
+      ?? groundElevation;
+    for (let i = 0; i < sampled.length; i++) {
+      const elevation = sampled[i];
+      if (elevation == null) sampled[i] = nearest;
+      else nearest = elevation;
+    }
+
+    const next = sampled as number[];
+    setTerrainElevationProfile((current) => {
+      if (
+        current.length === next.length &&
+        current.every((value, index) => Math.abs(value - next[index]) < 0.1)
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [groundElevation, is3D, track]);
+  useEffect(updateTerrainElevationProfile, [updateTerrainElevationProfile]);
 
   // Capture map snapshot when requested (for FlyCard export)
   // MapLibreOverlay with interleaved: false renders deck.gl layers on a
@@ -627,8 +693,19 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     const lng = pLo[0] + (pHi[0] - pLo[0]) * frac;
     const lat = pLo[1] + (pHi[1] - pLo[1]) * frac;
     const alt = pLo[2] + (pHi[2] - pLo[2]) * frac;
-    return { lng, lat, alt: is3D ? alt + groundElevation : 0 };
-  }, [track, replayProgress, is3D, groundElevation]);
+    const terrainElevation = terrainElevationAt(
+      terrainElevationProfile,
+      replayProgress,
+      groundElevation,
+    );
+    return {
+      lng,
+      lat,
+      alt: is3D
+        ? terrainElevation + Math.max(0, alt)
+        : 0,
+    };
+  }, [track, replayProgress, is3D, groundElevation, terrainElevationProfile]);
 
   // Sync replay progress to store for chart axis pointer
   useEffect(() => {
@@ -888,8 +965,12 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
   const deckPathData = useMemo(() => {
     if (visibleSmoothedTrack.length < 2) return [];
 
-    // Flight heights are relative to takeoff; deck.gl positions are above sea level.
-    const toAlt = (altitude: number) => (is3D ? altitude + groundElevation : 0);
+    // Flight heights are relative; deck.gl needs an absolute elevation at each
+    // coordinate so a route crossing higher terrain is not buried by the DEM.
+    const toAlt = (altitude: number, progress: number) => is3D
+      ? terrainElevationAt(terrainElevationProfile, progress, groundElevation)
+        + Math.max(0, altitude)
+      : 0;
     // `n` and `rawN` intentionally describe the complete flight. `renderN`
     // only controls how many already-colored segments are drawn during replay.
     const n = smoothedTrack.length;
@@ -905,8 +986,8 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
       // When 3D terrain is on, use deck.gl PathLayer for altitude.
       // When flat 2D, the MapLibre native line layer handles rendering.
       if (!is3D) return [];
-      const full: [number, number, number][] = visibleSmoothedTrack.map(([lng, lat, alt]) => [
-        lng, lat, toAlt(alt),
+      const full: [number, number, number][] = visibleSmoothedTrack.map(([lng, lat, alt], index) => [
+        lng, lat, toAlt(alt, index / Math.max(1, n - 1)),
       ]);
       const path = downsample(full, 2000);
       return [{
@@ -1119,8 +1200,8 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
 
       const [lng1, lat1, alt1] = ptA;
       const [lng2, lat2, alt2] = ptB;
-      const pt1: [number, number, number] = [lng1, lat1, toAlt(alt1)];
-      const pt2: [number, number, number] = [lng2, lat2, toAlt(alt2)];
+      const pt1: [number, number, number] = [lng1, lat1, toAlt(alt1, i / Math.max(1, n - 1))];
+      const pt2: [number, number, number] = [lng2, lat2, toAlt(alt2, (i + 1) / Math.max(1, n - 1))];
 
       // Check if color is close enough to current batch color
       const similarColor = batchColor &&
@@ -1147,7 +1228,7 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     flushBatch();
 
     return segments;
-  }, [is3D, groundElevation, smoothedTrack, visibleSmoothedTrack, track.length, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
+  }, [is3D, groundElevation, terrainElevationProfile, smoothedTrack, visibleSmoothedTrack, track.length, colorBy, homeLat, homeLon, telemetry, durationSecs, showTooltip, simplified]);
 
   // ── Simplified 2D: GeoJSON for MapLibre native line layer ──────
   const simplifiedPathGeoJSON = useMemo(() => {
@@ -1483,7 +1564,9 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
       if (!map.getSource(TERRAIN_SOURCE_ID)) {
         map.addSource(TERRAIN_SOURCE_ID, TERRAIN_SOURCE);
       }
-      map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.4 });
+      if (map.getTerrain()?.source !== TERRAIN_SOURCE_ID) {
+        map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.4 });
+      }
     } catch (e) {
       console.warn('[FlightMap] Failed to enable terrain:', e);
     }
@@ -1566,10 +1649,21 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
   }, [tracePath]);
 
   useEffect(() => {
-    if (is3D) {
-      enableTerrain();
-    }
-  }, [enableTerrain, is3D, resolvedTheme]);
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const handleStyleLoad = () => {
+      if (is3D) {
+        enableTerrain();
+      }
+    };
+
+    // Selecting another map mode replaces the style and its custom DEM source.
+    map.on('style.load', handleStyleLoad);
+    return () => {
+      map.off('style.load', handleStyleLoad);
+    };
+  }, [enableTerrain, is3D]);
 
   useEffect(() => {
     const container = mapContainerRef.current;
@@ -1644,7 +1738,10 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
         ref={mapRef}
         onMove={handleMapMove}
         onSourceData={updateGroundElevation}
-        onIdle={updateGroundElevation}
+        onIdle={() => {
+          updateGroundElevation();
+          updateTerrainElevationProfile();
+        }}
         onLoad={() => {
           if (is3D) {
             enableTerrain();

@@ -1,5 +1,5 @@
 {
-  "sourceFingerprint": "318d3d72aa5b82422f627bcb2469485e4206d4fe824b895d58602055655064d9",
+  "sourceFingerprint": "5b260b95b15fd84469a535e02eed68ef4d7c3c11807638cc583c713f654e1149",
   "packageName": "open-dronelog",
   "projectVersion": "3.3.1",
   "dependencies": [
@@ -28,6 +28,7 @@
     "zustand"
   ],
   "devDependencies": [
+    "@tailwindcss/postcss",
     "@tauri-apps/cli",
     "@types/react",
     "@types/react-dom",
