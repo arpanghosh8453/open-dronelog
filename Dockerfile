@@ -51,7 +51,7 @@ RUN touch src/main.rs src/lib.rs && \
 # ---------------------------------------------------------------------------
 # Stage 2: Frontend build
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS frontend-builder
+FROM node:22.23.4-bookworm-slim AS frontend-builder
 
 WORKDIR /build
 
@@ -72,15 +72,14 @@ RUN npx vite build
 # ---------------------------------------------------------------------------
 # Stage 3: Runtime
 # ---------------------------------------------------------------------------
-FROM nginx:stable-bookworm AS runtime
+FROM node:22.23.4-bookworm-slim AS runtime
 
-# Install Python and Node.js for custom parsers
+# Install nginx and Python for custom parsers.
 RUN apt-get update && apt-get install -y \
+    nginx \
     python3 \
     python3-pip \
     python3-venv \
-    nodejs \
-    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install optional Python dependencies for custom parser scripts.
