@@ -74,9 +74,9 @@ RUN npx vite build
 # ---------------------------------------------------------------------------
 FROM node:22.23.4-bookworm-slim AS runtime
 
-# Install nginx and Python for custom parsers.
+
+# Install Python for custom parsers.
 RUN apt-get update && apt-get install -y \
-    nginx \
     python3 \
     python3-pip \
     python3-venv \
