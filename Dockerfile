@@ -75,12 +75,14 @@ RUN npx vite build
 FROM node:22.23.4-bookworm-slim AS runtime
 
 
-# Install Python for custom parsers.
+# Install nginx and Python for custom parsers.
 RUN apt-get update && apt-get install -y \
+    nginx \
     python3 \
     python3-pip \
     python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
 
 # Install optional Python dependencies for custom parser scripts.
 # Users can edit requirements.txt and rebuild the image.
