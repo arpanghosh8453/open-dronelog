@@ -600,6 +600,10 @@ body.overlay-active .settings-scroll {
     @apply text-2xl font-bold text-white;
   }
 
+  body.theme-light .stat-value {
+    color: #0f172a;
+  }
+
   .stat-label {
     @apply text-sm text-gray-400;
   }
