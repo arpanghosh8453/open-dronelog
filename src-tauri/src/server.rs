@@ -9,12 +9,17 @@ use std::sync::Arc;
 
 use axum::{
     extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State as AxumState},
-    http::StatusCode,
-    routing::{delete, get, post, put},
+    http::{header, HeaderValue, Request, StatusCode},
+    middleware::{self, Next},
+    response::Response,
+    routing::{any, delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 use crate::api::DjiApi;
@@ -2336,6 +2341,73 @@ async fn set_donation_acknowledged(
 // SERVER SETUP
 // ============================================================================
 
+// ============================================================================
+// STATIC FRONTEND (optional)
+// ============================================================================
+
+/// Content-Security-Policy for the web UI (mirrors the former nginx config).
+const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self' blob:; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tile.opentopomap.org https://services.arcgisonline.com; connect-src 'self' https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tiles.basemaps.cartocdn.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://tile.opentopomap.org https://services.arcgisonline.com https://api.github.com https://s3.amazonaws.com https://archive-api.open-meteo.com https://demotiles.maplibre.org https://nominatim.openstreetmap.org; font-src 'self' https://fonts.gstatic.com https://tiles.basemaps.cartocdn.com; manifest-src 'self'; frame-ancestors 'self';";
+
+/// File extensions that get long-lived caching (same set as the nginx config).
+const CACHEABLE_EXTENSIONS: &[&str] = &[
+    "js", "css", "png", "jpg", "jpeg", "gif", "ico", "svg", "woff", "woff2",
+];
+
+/// Add `Cache-Control: public, max-age=30d, immutable` to static assets.
+async fn cache_static_assets(req: Request<axum::body::Body>, next: Next) -> Response {
+    let cacheable = req
+        .uri()
+        .path()
+        .rsplit_once('.')
+        .map(|(_, ext)| CACHEABLE_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+        .unwrap_or(false);
+    let mut resp = next.run(req).await;
+    if cacheable && resp.status().is_success() {
+        resp.headers_mut().insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=2592000, immutable"),
+        );
+    }
+    resp
+}
+
+/// Router serving the built SPA from `dir`: static files with gzip, long
+/// caching for assets, and `index.html` as fallback for client-side routes.
+/// Unknown `/api/*` paths return 404 instead of the SPA shell.
+fn static_router(dir: &FsPath) -> Router {
+    let index = dir.join("index.html");
+    let files = ServeDir::new(dir).fallback(ServeFile::new(index));
+    Router::new()
+        .route("/api/*rest", any(|| async { StatusCode::NOT_FOUND }))
+        .fallback_service(files)
+        .layer(middleware::from_fn(cache_static_assets))
+        .layer(CompressionLayer::new().gzip(true))
+}
+
+/// Apply the web UI security headers to every response.
+fn with_security_headers(router: Router) -> Router {
+    let set = |name: header::HeaderName, value: &'static str| {
+        SetResponseHeaderLayer::if_not_present(name, HeaderValue::from_static(value))
+    };
+    router
+        .layer(set(header::X_CONTENT_TYPE_OPTIONS, "nosniff"))
+        .layer(set(header::X_FRAME_OPTIONS, "SAMEORIGIN"))
+        .layer(set(header::REFERRER_POLICY, "strict-origin-when-cross-origin"))
+        .layer(set(header::CONTENT_SECURITY_POLICY, CONTENT_SECURITY_POLICY))
+}
+
+/// Build the router with the frontend attached when `STATIC_DIR` is set.
+fn build_app(state: WebAppState) -> Router {
+    let router = build_router(state);
+    match std::env::var("STATIC_DIR") {
+        Ok(dir) if !dir.is_empty() => {
+            log::info!("Serving frontend from {}", dir);
+            with_security_headers(router.fallback_service(static_router(FsPath::new(&dir))))
+        }
+        _ => router,
+    }
+}
+
 /// Build the Axum router with all API routes
 pub fn build_router(state: WebAppState) -> Router {
     let cors = CorsLayer::new()
@@ -2491,7 +2563,7 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
         log::info!("SYNC_LOGS_PATH configured but SYNC_INTERVAL not set. Sync is manual-only (via Sync button in web interface).");
     }
 
-    let router = build_router(state);
+    let router = build_app(state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port = std::env::var("PORT").unwrap_or_else(|_| "3001".to_string());
@@ -2745,4 +2817,79 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
     );
 
     Ok((total_processed, total_skipped, total_errors))
+}
+
+#[cfg(test)]
+mod static_tests {
+    use super::*;
+    use tower::ServiceExt;
+
+    fn app() -> (tempfile::TempDir, Router) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("index.html"), "<html>spa</html>").unwrap();
+        std::fs::create_dir(dir.path().join("assets")).unwrap();
+        std::fs::write(dir.path().join("assets/app.js"), "x".repeat(4096)).unwrap();
+        let router = with_security_headers(
+            Router::new()
+                .route("/api/health", get(health))
+                .fallback_service(static_router(dir.path())),
+        );
+        (dir, router)
+    }
+
+    async fn get_path(app: &Router, path: &str, gzip: bool) -> Response {
+        let mut req = Request::builder().uri(path);
+        if gzip {
+            req = req.header(header::ACCEPT_ENCODING, "gzip");
+        }
+        app.clone()
+            .oneshot(req.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn spa_fallback_serves_index_for_client_routes() {
+        let (_d, app) = app();
+        let resp = get_path(&app, "/flights/42", false).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(&body[..], b"<html>spa</html>");
+    }
+
+    #[tokio::test]
+    async fn api_routes_win_and_unknown_api_is_404() {
+        let (_d, app) = app();
+        assert_eq!(get_path(&app, "/api/health", false).await.status(), StatusCode::OK);
+        assert_eq!(get_path(&app, "/api/nope", false).await.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn assets_are_cached_and_gzipped_index_is_not_cached() {
+        let (_d, app) = app();
+        let js = get_path(&app, "/assets/app.js", true).await;
+        assert_eq!(js.status(), StatusCode::OK);
+        assert_eq!(
+            js.headers()[header::CACHE_CONTROL],
+            "public, max-age=2592000, immutable"
+        );
+        assert_eq!(js.headers()[header::CONTENT_ENCODING], "gzip");
+        let idx = get_path(&app, "/", false).await;
+        assert!(idx.headers().get(header::CACHE_CONTROL).is_none());
+    }
+
+    #[tokio::test]
+    async fn security_headers_on_all_responses() {
+        let (_d, app) = app();
+        for path in ["/", "/assets/app.js", "/api/health", "/api/nope"] {
+            let h = get_path(&app, path, false).await;
+            let h = h.headers();
+            assert_eq!(h[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "{path}");
+            assert_eq!(h[header::X_FRAME_OPTIONS], "SAMEORIGIN", "{path}");
+            assert!(h[header::CONTENT_SECURITY_POLICY]
+                .to_str()
+                .unwrap()
+                .starts_with("default-src 'self'"), "{path}");
+        }
+    }
 }
