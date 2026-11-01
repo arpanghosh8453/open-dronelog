@@ -9,13 +9,12 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Rust backend build
 # ---------------------------------------------------------------------------
-FROM rust:1.85-bookworm AS backend-builder
+FROM rust:1.85-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 AS backend-builder
 
 # Install system deps for DuckDB bundled build
 RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
-    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -51,7 +50,7 @@ RUN touch src/main.rs src/lib.rs && \
 # ---------------------------------------------------------------------------
 # Stage 2: Frontend build
 # ---------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS frontend-builder
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
 
 WORKDIR /build
 
@@ -72,7 +71,7 @@ RUN npx vite build
 # ---------------------------------------------------------------------------
 # Stage 3: Runtime
 # ---------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS runtime
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS runtime
 
 
 # Install nginx and Python for custom parsers.
