@@ -3,7 +3,7 @@
 #
 # Stage 1: Build Rust backend (Axum web server)
 # Stage 2: Build React frontend (Vite)
-# Stage 3: Runtime — Nginx + Axum in a single container
+# Stage 3: Runtime — single Axum process (serves API and frontend), non-root
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -74,14 +74,12 @@ RUN npx vite build
 FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS runtime
 
 
-# Install nginx and Python for custom parsers.
+# Install Python for custom parsers.
 RUN apt-get update && apt-get install -y \
-    nginx \
     python3 \
     python3-pip \
     python3-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -f /etc/nginx/sites-enabled/default
+    && rm -rf /var/lib/apt/lists/*
 
 # Install optional Python dependencies for custom parser scripts.
 # Users can edit requirements.txt and rebuild the image.
@@ -96,33 +94,31 @@ ENV PATH="/opt/parser-venv/bin:${PATH}"
 # Copy backend binary
 COPY --from=backend-builder /build/src-tauri/target/release/open-dronelog /app/open-dronelog
 
-# Copy frontend build
-COPY --from=frontend-builder /build/dist /usr/share/nginx/html
+# Copy frontend build (served by the Axum backend)
+COPY --from=frontend-builder /build/dist /app/www
 
-# Copy nginx config
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy entrypoint
-COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-# Create data directory
-RUN mkdir -p /data/drone-logbook
+# Data directory, owned by the unprivileged runtime user. Created before VOLUME
+# so new volumes inherit the ownership.
+RUN mkdir -p /data/drone-logbook && chown -R 65532:65532 /data
 
 # Environment variables
 ENV DATA_DIR=/data/drone-logbook
-ENV PORT=3001
-ENV HOST=127.0.0.1
+ENV STATIC_DIR=/app/www
+ENV PORT=8080
+ENV HOST=0.0.0.0
 ENV RUST_LOG=DEBUG
 
-# Expose HTTP port
-EXPOSE 80
+# Unprivileged HTTP port (no privileges needed to bind)
+EXPOSE 8080
 
-# Probe the Axum backend directly (PORT=3001); needs no shell or curl
+# Run as non-root
+USER 65532:65532
+
+# Probe the server over loopback; needs no shell or curl
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["/app/open-dronelog", "--healthcheck"]
 
 # Persistent data volume
 VOLUME ["/data/drone-logbook"]
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/app/open-dronelog"]

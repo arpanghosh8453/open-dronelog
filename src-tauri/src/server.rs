@@ -2572,9 +2572,38 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
     log::info!("Starting Open DroneLog web server on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, router).await?;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
+    log::info!("Server stopped");
     Ok(())
+}
+
+/// Resolve on SIGTERM/SIGINT. Required when running as PID 1 in a container,
+/// where the kernel applies no default action to signals without a handler.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+    log::info!("Shutdown signal received, stopping server");
 }
 
 /// Start the cron scheduler for automatic folder sync
