@@ -287,7 +287,7 @@ npm run tauri
 
 ## Docker deployment (Self-hosted Web)
 
-The app can also be deployed as a self-hosted web application using Docker. This uses an Axum REST backend instead of Tauri IPC, with Nginx serving the frontend and proxying API requests.
+The app can also be deployed as a self-hosted web application using Docker. This uses an Axum REST backend instead of Tauri IPC, with the backend serving the frontend itself. The container is hardened: it runs as a non-root user (UID 65532) on an unprivileged port, uses a minimal distroless base image with no shell or package manager, and works with a read-only root filesystem.
 
 > [!TIP]
 > For hosted/server deployments where you want a dedicated desktop/mobile uploader that watches a local folder and syncs logs to your hosted ODL server automatically, use the companion utility: [opendronelog-sync](https://github.com/arpanghosh8453/opendronelog-sync).
@@ -307,8 +307,12 @@ Pull the pre-built image from GitHub Container Registry:
 docker pull ghcr.io/arpanghosh8453/open-dronelog:latest
 
 docker run -d \
-  -p 8080:80 \
+  -p 8080:8080 \
   -v drone-data:/data/drone-logbook \
+  --read-only \
+  --tmpfs /tmp:size=1g,mode=1777 \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
   --name open-dronelog \
   ghcr.io/arpanghosh8453/open-dronelog:latest
 ```
@@ -322,6 +326,34 @@ docker compose up -d
 ```
 
 Then open http://localhost:8080 in your browser.
+
+### Container hardening
+
+The image and the provided compose files follow common container hardening practices:
+
+- **Minimal base image:** `distroless` (Python 3.11 variant, needed for [custom parsers](docs/custom_parsers.md)), pinned by digest. There is no shell, package manager or `curl`.
+- **Non-root:** the process runs as UID/GID `65532` and listens on the unprivileged port `8080`. No privilege escalation is needed (`no-new-privileges`) and all Linux capabilities can be dropped (`cap_drop: [ALL]`).
+- **Read-only root filesystem:** the only writable locations are the data volume (`/data/drone-logbook`) and `/tmp`. Mount `/tmp` as a tmpfs (as the compose files do) or as a disk-backed volume; without a writable `/tmp`, uploads fail.
+- **Single process:** the backend serves both the API and the frontend, handles `SIGTERM` for clean shutdown, and exposes a health check (`open-dronelog --healthcheck`, also used as the image `HEALTHCHECK`).
+
+> [!NOTE]
+> `/tmp` holds uploads, backup/restore archives and custom-parser output. A backup contains a full export of the database, so size the tmpfs accordingly (the compose files use `1g`) or mount a host directory/volume on `/tmp` for large logbooks.
+
+### Upgrading from earlier versions (breaking changes)
+
+Earlier images ran as root behind Nginx on port 80 and included a shell, Node.js and Bash. If you are upgrading an existing deployment:
+
+1. **Port:** the container now listens on `8080` instead of `80`. Change your port mapping from `-p 8080:80` / `"8080:80"` to `-p 8080:8080` / `"8080:8080"`. If you run your own reverse proxy, point it at container port `8080`.
+2. **Volume permissions:** the container no longer runs as root, so the data volume must be writable by UID/GID `65532`. Fix the ownership of an existing volume once, before starting the new image (otherwise the container exits with `Server failed: IO error: Permission denied`):
+   ```bash
+   # named volume (adjust the name, e.g. <project>_drone-data for compose)
+   docker run --rm -v drone-data:/data busybox chown -R 65532:65532 /data
+   # or, for a host directory:
+   sudo chown -R 65532:65532 /path/to/data
+   ```
+   The same applies to bind-mounted folders the app writes to (for example the `uploaded` folder). Read-only sync folders only need to be readable by everyone/UID 65532.
+3. **No shell in the image:** `docker exec open-dronelog sh` no longer works. Use `docker logs` and the `/api` endpoints for troubleshooting. Custom parsers must be Python scripts (standard library plus the packages in `requirements.txt`) or self-contained executables; Bash/shell scripts and Node.js parsers are not available. See the [custom parser guide](docs/custom_parsers.md).
+4. **Read-only filesystem:** if you copy your own compose file, add `read_only: true` and a `tmpfs` on `/tmp` as in the provided examples (optional, but recommended).
 
 ### Building locally from source
 
@@ -436,7 +468,7 @@ When set, any create or delete operation must include the matching master passwo
 **Strongly recommended for internet-facing deployments:**
 
 1. **Use a reverse proxy** (e.g., Nginx, Caddy, Traefik) with TLS termination in front of the container
-2. **Do not expose port 80 directly** to the public internet without encryption
+2. **Do not expose port 8080 directly** to the public internet without encryption
 3. Set `PROFILE_CREATION_PASS` to prevent unauthorized profile creation
 
 ### Security limitations
@@ -519,11 +551,7 @@ npm run context:check
 │       ├── utils.ts         # Utilities
 │       └── api.ts           # Backend adapter (invoke/fetch)
 │
-├── docker/                  # DOCKER CONFIG
-│   ├── nginx.conf           # Nginx reverse proxy config
-│   └── entrypoint.sh        # Container startup script
-│
-├── Dockerfile               # Multi-stage build
+├── Dockerfile               # Multi-stage build (distroless, non-root runtime)
 ├── docker-compose.yml       # Deploy with pre-built GHCR image
 ├── docker-compose-build.yml # Build from source locally
 │
