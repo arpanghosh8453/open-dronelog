@@ -811,6 +811,60 @@ async fn remove_api_key(
         .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove API key: {}", e)))
 }
 
+/// GET /api/health — Liveness probe (no auth, no database access)
+async fn health() -> &'static str {
+    "ok"
+}
+
+/// Run the container health check: GET /api/health on the local server.
+///
+/// Uses plain `std::net` so it works without a shell, curl or async runtime
+/// (e.g. in a distroless image). Returns `true` if the server answered 200.
+pub fn run_healthcheck() -> bool {
+    use std::io::{Read, Write};
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3001".to_string());
+    // A wildcard bind address is not connectable; probe loopback instead.
+    let host = match std::env::var("HOST") {
+        Ok(h) if !h.is_empty() && h != "0.0.0.0" && h != "::" => h,
+        _ => "127.0.0.1".to_string(),
+    };
+    let timeout = Duration::from_secs(3);
+
+    let addr = match format!("{}:{}", host, port)
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next())
+    {
+        Some(a) => a,
+        None => return false,
+    };
+    let mut stream = match TcpStream::connect_timeout(&addr, timeout) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+
+    let req = format!(
+        "GET /api/health HTTP/1.0\r\nHost: {}\r\nConnection: close\r\n\r\n",
+        host
+    );
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    match stream.read(&mut buf) {
+        Ok(n) => {
+            let head = String::from_utf8_lossy(&buf[..n]);
+            head.starts_with("HTTP/1.0 200") || head.starts_with("HTTP/1.1 200")
+        }
+        Err(_) => false,
+    }
+}
+
 /// GET /api/app_data_dir — Get the app data directory path
 async fn get_app_data_dir(
     AxumState(state): AxumState<WebAppState>,
@@ -2290,6 +2344,7 @@ pub fn build_router(state: WebAppState) -> Router {
         .allow_headers(Any);
 
     Router::new()
+        .route("/api/health", get(health))
         .route("/api/import", post(import_log))
         .route("/api/manual_flight", post(create_manual_flight))
         .route("/api/flights", get(get_flights))

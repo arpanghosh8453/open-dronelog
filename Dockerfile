@@ -118,6 +118,10 @@ ENV RUST_LOG=DEBUG
 # Expose HTTP port
 EXPOSE 80
 
+# Probe the Axum backend directly (PORT=3001); needs no shell or curl
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["/app/open-dronelog", "--healthcheck"]
+
 # Persistent data volume
 VOLUME ["/data/drone-logbook"]
 
