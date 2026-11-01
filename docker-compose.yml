@@ -32,6 +32,20 @@ services:
       # This is only applied when the default profile does not already have a password.
       # - DEFAULT_PROFILE_PASSWORD=your_default_profile_password_here
     restart: unless-stopped
+    # --- Hardening: the image runs as non-root and works with a read-only rootfs ---
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Scratch space for uploads, backup/restore archives and parser output.
+    # Lives in RAM: size it above your largest backup (a backup holds a full
+    # export of the database), or mount a host directory/volume on /tmp instead.
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    pids_limit: 256
+    # Optional: cap memory (DuckDB itself is limited to 2GB).
+    # mem_limit: 4g
 
 volumes:
   drone-data:

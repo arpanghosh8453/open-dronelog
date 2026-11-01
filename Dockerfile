@@ -121,6 +121,11 @@ ENV PORT=8080
 ENV HOST=0.0.0.0
 ENV RUST_LOG=DEBUG
 
+# Writable HOME for parser libraries that cache under ~ (mount a tmpfs on /tmp
+# when running with a read-only root filesystem); no .pyc writes.
+ENV HOME=/tmp
+ENV PYTHONDONTWRITEBYTECODE=1
+
 # Unprivileged HTTP port (no privileges needed to bind)
 EXPOSE 8080
 
