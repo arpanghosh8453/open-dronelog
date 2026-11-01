@@ -3,7 +3,8 @@
 #
 # Stage 1: Build Rust backend (Axum web server)
 # Stage 2: Build React frontend (Vite)
-# Stage 3: Runtime — single Axum process (serves API and frontend), non-root
+# Stage 3: Python venv for custom parsers (built where pip/apt are available)
+# Stage 4: Runtime — distroless, non-root, single Axum process (API + frontend)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -69,37 +70,49 @@ ENV VITE_BACKEND=web
 RUN npx vite build
 
 # ---------------------------------------------------------------------------
-# Stage 3: Runtime
+# Stage 3: Python venv for custom parser scripts
+#
+# Built on Debian 12 so the interpreter version (3.11.2) matches the
+# distroless python3-debian12 runtime image, which the venv points back to.
 # ---------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS runtime
+FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS python-venv
 
-
-# Install Python for custom parsers.
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Install optional Python dependencies for custom parser scripts.
+# Optional Python dependencies for custom parser scripts.
 # Users can edit requirements.txt and rebuild the image.
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/parser-venv && \
-    /opt/parser-venv/bin/python -m pip install --no-cache-dir -U pip && \
-    /opt/parser-venv/bin/python -m pip install --no-cache-dir -r /app/requirements.txt
+    /opt/parser-venv/bin/python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
+    # pip is not needed at runtime
+    /opt/parser-venv/bin/python -m pip uninstall -y pip
 
-# Ensure parser commands like "python3" use the venv interpreter by default.
-ENV PATH="/opt/parser-venv/bin:${PATH}"
+# Data directory skeleton: distroless has no shell, so create it here and
+# copy it over with the right ownership.
+RUN mkdir -p /data/drone-logbook
 
-# Copy backend binary
+# ---------------------------------------------------------------------------
+# Stage 4: Runtime (distroless: no shell, no package manager)
+#
+# python3-debian12 ships glibc, libstdc++ (needed by bundled DuckDB) and
+# Python 3.11 for custom parsers. The :nonroot variant runs as UID 65532.
+# ---------------------------------------------------------------------------
+FROM gcr.io/distroless/python3-debian12:nonroot@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5 AS runtime
+
+# Python venv for custom parsers; make "python3" resolve to the venv interpreter
+COPY --from=python-venv /opt/parser-venv /opt/parser-venv
+ENV PATH="/opt/parser-venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Backend binary and frontend build (served by the Axum backend)
 COPY --from=backend-builder /build/src-tauri/target/release/open-dronelog /app/open-dronelog
-
-# Copy frontend build (served by the Axum backend)
 COPY --from=frontend-builder /build/dist /app/www
 
-# Data directory, owned by the unprivileged runtime user. Created before VOLUME
-# so new volumes inherit the ownership.
-RUN mkdir -p /data/drone-logbook && chown -R 65532:65532 /data
+# Data directory owned by the unprivileged user, created before VOLUME so new
+# volumes inherit the ownership.
+COPY --from=python-venv --chown=65532:65532 /data /data
 
 # Environment variables
 ENV DATA_DIR=/data/drone-logbook
@@ -111,7 +124,7 @@ ENV RUST_LOG=DEBUG
 # Unprivileged HTTP port (no privileges needed to bind)
 EXPOSE 8080
 
-# Run as non-root
+# Run as non-root (explicit, matches the :nonroot base)
 USER 65532:65532
 
 # Probe the server over loopback; needs no shell or curl
@@ -121,4 +134,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # Persistent data volume
 VOLUME ["/data/drone-logbook"]
 
+# The base image's entrypoint is python3; run the backend instead
 ENTRYPOINT ["/app/open-dronelog"]
