@@ -331,7 +331,7 @@ Then open http://localhost:8080 in your browser.
 
 The image and the provided compose files follow common container hardening practices:
 
-- **Minimal base image:** `distroless` (Python 3.11 variant, needed for [custom parsers](docs/custom_parsers.md)), pinned by digest. There is no shell, package manager or `curl`.
+- **Minimal base image:** `distroless` (Python 3.13 variant, needed for [custom parsers](docs/custom_parsers.md)), pinned by digest. There is no shell, package manager or `curl`.
 - **Non-root:** the process runs as UID/GID `65532` and listens on the unprivileged port `8080`. No privilege escalation is needed (`no-new-privileges`) and all Linux capabilities can be dropped (`cap_drop: [ALL]`).
 - **Read-only root filesystem:** the only writable locations are the data volume (`/data/drone-logbook`) and `/tmp`. Mount `/tmp` as a tmpfs (as the compose files do) or as a disk-backed volume; without a writable `/tmp`, uploads fail.
 - **Single process:** the backend serves both the API and the frontend, handles `SIGTERM` for clean shutdown, and exposes a health check (`open-dronelog --healthcheck`, also used as the image `HEALTHCHECK`).

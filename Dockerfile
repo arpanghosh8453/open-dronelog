@@ -72,10 +72,10 @@ RUN npx vite build
 # ---------------------------------------------------------------------------
 # Stage 3: Python venv for custom parser scripts
 #
-# Built on Debian 12 so the interpreter version (3.11.2) matches the
-# distroless python3-debian12 runtime image, which the venv points back to.
+# Built on Debian 13 so the interpreter version (3.13.5) matches the
+# distroless python3-debian13 runtime image, which the venv points back to.
 # ---------------------------------------------------------------------------
-FROM debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS python-venv
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS python-venv
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -97,10 +97,10 @@ RUN mkdir -p /data/drone-logbook
 # ---------------------------------------------------------------------------
 # Stage 4: Runtime (distroless: no shell, no package manager)
 #
-# python3-debian12 ships glibc, libstdc++ (needed by bundled DuckDB) and
-# Python 3.11 for custom parsers. The :nonroot variant runs as UID 65532.
+# python3-debian13 ships glibc, libstdc++ (needed by bundled DuckDB) and
+# Python 3.13 for custom parsers. The :nonroot variant runs as UID 65532.
 # ---------------------------------------------------------------------------
-FROM gcr.io/distroless/python3-debian12:nonroot@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5 AS runtime
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:1c32c3720dc4c7f0c7dbe998737f32c200add6511eca7cec705008be488b87d6 AS runtime
 
 # Python venv for custom parsers; make "python3" resolve to the venv interpreter
 COPY --from=python-venv /opt/parser-venv /opt/parser-venv

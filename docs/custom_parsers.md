@@ -179,7 +179,7 @@ if __name__ == "__main__":
 
 > [!IMPORTANT]
 > The Docker image is a minimal distroless image: it has **no shell, Bash, Node.js, package manager or common CLI tools**, and the container runs as a non-root user (UID `65532`) with a read-only root filesystem. In Docker, custom parsers can therefore be:
-> - **Python 3.11 scripts** using the standard library plus the packages from `requirements.txt` (see below), or
+> - **Python 3.13 scripts** using the standard library plus the packages from `requirements.txt` (see below), or
 > - **self-contained executables** (statically linked, or linked only against glibc/libstdc++), e.g. compiled Go/Rust/C++ binaries.
 >
 > Shell scripts (`bash`, `sh`) and Node.js parsers are **not supported** in the Docker image. Parser scripts must not write next to themselves: `/app/plugins` should be mounted read-only, and temporary files belong in `/tmp`.
