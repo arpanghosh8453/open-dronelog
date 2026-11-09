@@ -21,7 +21,7 @@
     "wrongPassword": "Incorrect password. Please try again."
   },
   "dashboard": {
-    "individual": "Individual",
+    "individual": "Flights",
     "overview": "Overview",
     "import": "Import",
     "importExpand": "Import — click to expand",

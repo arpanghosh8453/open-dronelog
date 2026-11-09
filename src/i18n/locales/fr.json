@@ -21,7 +21,7 @@
     "wrongPassword": "Mot de passe incorrect. Veuillez réessayer."
   },
   "dashboard": {
-    "individual": "Individuel",
+    "individual": "Vols",
     "overview": "Aperçu",
     "import": "Importer",
     "importExpand": "Importer — cliquez pour développer",

@@ -21,7 +21,7 @@
     "wrongPassword": "パスワードが正しくありません。もう一度お試しください。"
   },
   "dashboard": {
-    "individual": "個別",
+    "individual": "フライト",
     "overview": "概要",
     "import": "インポート",
     "importExpand": "インポート — クリックで展開",
