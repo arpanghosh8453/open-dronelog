@@ -112,6 +112,12 @@ impl Database {
     fn open_with_recovery(db_path: &PathBuf) -> Result<Connection, DatabaseError> {
         match Connection::open(db_path) {
             Ok(conn) => Ok(conn),
+            Err(err) if Self::is_lock_error(&err.to_string()) => {
+                // Someone else has the file open. That's not corruption, so
+                // don't touch the WAL or move the database aside.
+                log::warn!("DuckDB open failed because the file is in use: {}", err);
+                Err(DatabaseError::from(err))
+            }
             Err(err) => {
                 log::warn!("DuckDB open failed: {}. Attempting WAL recovery...", err);
 
@@ -137,6 +143,12 @@ impl Database {
                 }
             }
         }
+    }
+
+    /// True when DuckDB refused to open a file because another connection
+    /// or process holds it (Windows sharing violation or a POSIX lock).
+    fn is_lock_error(msg: &str) -> bool {
+        msg.contains("being used by another process") || msg.contains("Could not set lock on file")
     }
 
     /// Backup the database before WAL recovery or rebuilds
@@ -3268,6 +3280,35 @@ pub fn delete_profile(data_dir: &std::path::Path, profile: &str) -> Result<(), S
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn lock_errors_are_not_treated_as_corruption() {
+        assert!(Database::is_lock_error(
+            "IO Error: Cannot open file \"flights.db\": The process cannot access the file because it is being used by another process."
+        ));
+        assert!(Database::is_lock_error(
+            "IO Error: Could not set lock on file \"/data/flights.db\": Conflicting lock is held"
+        ));
+        assert!(!Database::is_lock_error("IO Error: Corrupt database file"));
+    }
+
+    #[test]
+    fn second_open_of_a_held_file_keeps_the_data() {
+        let temp_dir = tempdir().unwrap();
+        let dir = temp_dir.path().to_path_buf();
+        let first = Database::new(dir.clone(), "default").unwrap();
+        // While `first` holds the file, a second open must fail without
+        // moving the database aside.
+        let _ = Database::new(dir.clone(), "default");
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.contains(".bak."))
+            .collect();
+        assert!(leftovers.is_empty(), "database was moved aside: {:?}", leftovers);
+        drop(first);
+    }
 
     #[test]
     fn test_database_initialization() {
