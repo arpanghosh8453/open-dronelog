@@ -1294,6 +1294,70 @@ async fn get_sync_config(
     })
 }
 
+// ============================================================================
+// ONE-TIME PHOTO RECOUNT
+// ============================================================================
+
+/// Folders where this profile's original logs may still be: the kept-uploads folder and the
+/// server sync folder.
+fn original_log_folders(pdb: &ProfileDb) -> Vec<std::path::PathBuf> {
+    let config: serde_json::Value = std::fs::read_to_string(pdb.config_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::json!({}));
+    let mut folders = vec![config
+        .get("uploaded_files_path")
+        .and_then(|v| v.as_str())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| pdb.default_upload_folder())];
+    if let Some(sync) = pdb.sync_path() {
+        folders.push(sync);
+    }
+    folders
+}
+
+/// GET /api/maintenance/photo_recount — whether this profile still needs the recount.
+async fn get_photo_recount_status(
+    pdb: ProfileDb,
+) -> Result<Json<crate::recount::RecountStatus>, (StatusCode, Json<ErrorResponse>)> {
+    let db = pdb.db.clone();
+    tokio::task::spawn_blocking(move || crate::recount::status(&db))
+        .await
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+#[derive(Deserialize)]
+struct PhotoRecountParams {
+    #[serde(default)]
+    offset: usize,
+    limit: Option<usize>,
+}
+
+/// POST /api/maintenance/photo_recount — recount one batch; the client repeats with
+/// `next_offset` until `done`. Small batches keep each request well under proxy time limits.
+async fn run_photo_recount(
+    pdb: ProfileDb,
+    Json(params): Json<PhotoRecountParams>,
+) -> Result<Json<crate::recount::RecountChunk>, (StatusCode, Json<ErrorResponse>)> {
+    let folders = original_log_folders(&pdb);
+    let db = pdb.db.clone();
+    let limit = params.limit.unwrap_or(25).min(200);
+    tokio::task::spawn_blocking(move || crate::recount::run_chunk(&db, &folders, params.offset, limit))
+        .await
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
+/// POST /api/maintenance/photo_recount/dismiss — "Don't ask again".
+async fn dismiss_photo_recount(pdb: ProfileDb) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
+    crate::recount::dismiss(&pdb.db)
+        .map(|_| Json(true))
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e))
+}
+
 /// GET /api/allowed_log_extensions — Get built-in + custom parser extensions
 async fn get_allowed_log_extensions(
     pdb: ProfileDb,
@@ -2347,6 +2411,8 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/profiles/active", get(get_active_profile))
         .route("/api/profiles/switch", post(switch_profile))
         .route("/api/profiles/delete", post(delete_profile_endpoint))
+        .route("/api/maintenance/photo_recount", get(get_photo_recount_status).post(run_photo_recount))
+        .route("/api/maintenance/photo_recount/dismiss", post(dismiss_photo_recount))
         .route("/api/profiles/set_password", post(set_profile_password))
         .route("/api/profiles/remove_password", post(remove_profile_password))
         .route("/api/profiles/has_master_password", get(has_master_password))

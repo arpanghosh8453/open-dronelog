@@ -809,5 +809,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Gebruik de notatie JJJJ-MM-DD",
     "dateInFuture": "Datum kan niet in de toekomst liggen"
+  },
+  "photoRecount": {
+    "title": "Fototelling is gecorrigeerd",
+    "whatChanged": "Eerdere versies telden foto's die snel na elkaar werden gemaakt (bijvoorbeeld bij karteringsvluchten) te laag en toonden 0 foto's voor sommige toestellen, zoals de Matrice 4E. Nieuwe imports worden nu correct geteld.",
+    "offer": "Open DroneLog kan de DJI-vluchten in dit profiel ({{count}}) opnieuw tellen met het aantal foto's dat DJI in elk originele log opslaat. Aantallen gaan alleen omhoog, nooit omlaag.",
+    "originalsNote": "Hiervoor zijn de originele logbestanden nodig, dus het werkt alleen voor vluchten waarvan de bestanden zijn bewaard (\"Geüploade bestanden bewaren\" of KEEP_UPLOADED_FILES in Docker). Andere vluchten behouden hun huidige aantal.",
+    "recountNow": "Nu opnieuw tellen",
+    "later": "Later herinneren",
+    "dontAsk": "Niet meer vragen",
+    "running": "Foto's opnieuw tellen… {{done}} van {{total}} vluchten gecontroleerd",
+    "finished": "Klaar. Vluchten met gecorrigeerd fotoaantal: {{count}}.",
+    "missing": "Vluchten zonder bewaard origineel log (ongewijzigd): {{count}}.",
+    "failed": "Opnieuw tellen mislukt: {{error}}",
+    "close": "Sluiten"
   }
 }

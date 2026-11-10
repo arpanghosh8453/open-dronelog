@@ -802,5 +802,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Use o formato AAAA-MM-DD",
     "dateInFuture": "A data nao pode estar no futuro"
+  },
+  "photoRecount": {
+    "title": "A contagem de fotos foi corrigida",
+    "whatChanged": "Versões anteriores contavam menos fotos quando eram tiradas em sequência rápida (por exemplo, em missões de mapeamento) e mostravam 0 fotos em algumas aeronaves, como o Matrice 4E. As novas importações já são contadas corretamente.",
+    "offer": "O Open DroneLog pode recontar os voos DJI deste perfil ({{count}}) usando o número de fotos que a DJI salva em cada registro original. As contagens só aumentam, nunca diminuem.",
+    "originalsNote": "Isso exige os arquivos de registro originais, então só funciona para voos cujos arquivos foram mantidos (\"Manter arquivos enviados\" ou KEEP_UPLOADED_FILES no Docker). Os demais voos mantêm a contagem atual.",
+    "recountNow": "Recontar agora",
+    "later": "Lembrar mais tarde",
+    "dontAsk": "Não perguntar novamente",
+    "running": "Recontando fotos… {{done}} de {{total}} voos verificados",
+    "finished": "Pronto. Voos com contagem de fotos corrigida: {{count}}.",
+    "missing": "Voos sem registro original mantido (inalterados): {{count}}.",
+    "failed": "Falha ao recontar: {{error}}",
+    "close": "Fechar"
   }
 }

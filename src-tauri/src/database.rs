@@ -2636,6 +2636,16 @@ impl Database {
         Ok(())
     }
 
+    /// Set a flight's photo count (used by the one-time photo recount).
+    pub fn set_photo_count(&self, flight_id: i64, photo_count: i32) -> Result<(), DatabaseError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE flights SET photo_count = ? WHERE id = ?",
+            params![photo_count, flight_id],
+        )?;
+        Ok(())
+    }
+
     /// Run one-time startup deduplication for existing data.
     /// This only runs once - on first startup after the dedup feature is added.
     /// After running, it sets a flag so it won't run again.

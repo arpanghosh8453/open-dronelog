@@ -812,5 +812,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Use YYYY-MM-DD format",
     "dateInFuture": "Date cannot be in the future"
+  },
+  "photoRecount": {
+    "title": "Photo counts have been fixed",
+    "whatChanged": "Earlier versions undercounted photos taken in quick succession (for example on mapping missions) and showed 0 photos for some aircraft, such as the Matrice 4E. New imports are now counted correctly.",
+    "offer": "Open DroneLog can recount the DJI flights already in this profile ({{count}}) using the photo count DJI saves in each original log. Counts only ever go up, never down.",
+    "originalsNote": "This needs the original log files, so it only works for flights whose files were kept (\"Keep uploaded files\", or KEEP_UPLOADED_FILES in Docker). Other flights keep their current count.",
+    "recountNow": "Recount now",
+    "later": "Remind me later",
+    "dontAsk": "Don't ask again",
+    "running": "Recounting photos… {{done}} of {{total}} flights checked",
+    "finished": "Done. Flights with corrected photo counts: {{count}}.",
+    "missing": "Flights without a kept original log (left unchanged): {{count}}.",
+    "failed": "Recount failed: {{error}}",
+    "close": "Close"
   }
 }

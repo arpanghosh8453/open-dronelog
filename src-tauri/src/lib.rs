@@ -8,6 +8,7 @@ pub mod models;
 pub mod parser;
 pub mod plugins;
 pub mod profile_auth;
+pub mod recount;
 
 #[cfg(feature = "web")]
 pub mod server;

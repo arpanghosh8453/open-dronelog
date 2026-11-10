@@ -442,7 +442,12 @@ impl<'a> LogParser<'a> {
             .to_string();
 
         // Count photo and video capture events from telemetry transitions
-        let (photo_count, video_count) = crate::models::count_media_events(&points);
+        let (edge_photo_count, video_count) = crate::models::count_media_events(&points);
+        // The camera flag is only sampled a few times a second, so fast interval shooting
+        // (mapping at ~0.7 s per photo) keeps it on between shots and most photos are missed;
+        // on some aircraft (Matrice 4E) it is never set at all. The DJI app writes its own
+        // photo count into the log header, which is far closer, so prefer whichever is higher.
+        let photo_count = edge_photo_count.max(parser.details.capture_num.max(0));
 
         let metadata = FlightMetadata {
             id: self.db.generate_flight_id(),

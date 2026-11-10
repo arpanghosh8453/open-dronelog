@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { useFlightStore } from '@/stores/flightStore';
 import { Dashboard } from '@/components/dashboard/Dashboard';
+import { PhotoRecountPrompt } from '@/components/dashboard/PhotoRecountPrompt';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { isWebMode, unlockProfile } from '@/lib/api';
 import { useIsMobileRuntime } from '@/hooks/platform/useIsMobileRuntime';
@@ -593,6 +594,9 @@ function App() {
           </button>
         </div>
       )}
+
+      {/* One-time offer to recount photos for flights imported before the photo-count fix */}
+      <PhotoRecountPrompt />
 
       {/* Main Dashboard */}
       <AppErrorBoundary>
