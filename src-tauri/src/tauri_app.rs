@@ -1430,6 +1430,33 @@
         Ok(true)
     }
 
+    /// Rename a profile (not the active one, whose database is open). Requires the
+    /// profile's own password when it has one; the desktop app has no admin password.
+    #[tauri::command]
+    pub async fn rename_profile(
+        name: String,
+        new_name: String,
+        password: Option<String>,
+        state: State<'_, AppState>,
+    ) -> Result<String, String> {
+        let profile = database::existing_profile_name(&state.data_dir, name.trim())?;
+        let new_name = new_name.trim().to_string();
+
+        if profile_auth::profile_is_protected(&state.data_dir, &profile) {
+            match &password {
+                Some(pw) => profile_auth::verify_profile_password(&state.data_dir, &profile, pw)?,
+                None => return Err("Password is required to rename this profile".to_string()),
+            }
+        }
+
+        if database::get_active_profile(&state.data_dir) == profile {
+            return Err("Cannot rename the currently active profile. Switch to a different profile first.".to_string());
+        }
+
+        database::rename_profile(&state.data_dir, &profile, &new_name)?;
+        Ok(new_name)
+    }
+
     #[tauri::command]
     pub async fn set_profile_password(
         profile: String,
@@ -1731,6 +1758,7 @@
                 get_active_profile,
                 switch_profile,
                 delete_profile,
+                rename_profile,
                 set_profile_password,
                 remove_profile_password,
                 verify_supporter_code,

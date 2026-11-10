@@ -769,6 +769,8 @@
     "create": "Erstellen",
     "cancel": "Abbrechen",
     "delete": "Profil löschen",
+    "rename": "Profil umbenennen",
+    "renameTitle": "Profil „{{name}}“ umbenennen in:",
     "confirmDelete": "Profil \"{{name}}\" löschen? Alle Flüge in diesem Profil werden dauerhaft entfernt.",
     "namePlaceholder": "Profilname",
     "errorEmpty": "Profilname darf nicht leer sein",

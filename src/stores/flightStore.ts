@@ -210,8 +210,12 @@ interface FlightState {
   loadProfiles: () => Promise<void>;
   switchProfile: (name: string, opts?: { create?: boolean; password?: string; newPassword?: string; masterPassword?: string }) => Promise<void>;
   deleteProfile: (name: string, opts?: { password?: string; masterPassword?: string }) => Promise<void>;
+  renameProfile: (name: string, newName: string, opts?: { password?: string; masterPassword?: string }) => Promise<void>;
   logout: () => void;
 }
+
+/** Per-profile settings this browser keeps under `${prefix}:${profileName}`. */
+const PROFILE_SCOPED_STORAGE_PREFIXES = ['profileSettings', 'flight_list_tag_filter_mode_v1'];
 
 export const useFlightStore = create<FlightState>((set, get) => ({
   // Initial state
@@ -1238,6 +1242,26 @@ export const useFlightStore = create<FlightState>((set, get) => ({
     // Remove session if this was the deleted profile
     api.removeProfileKey('profileSession');
     // Refresh the profile list
+    await get().loadProfiles();
+  },
+
+  renameProfile: async (name: string, newName: string, opts?: { password?: string; masterPassword?: string }) => {
+    const renamed = await api.renameProfile({
+      name,
+      new_name: newName,
+      password: opts?.password,
+      master_password: opts?.masterPassword,
+    });
+    // Carry this browser's saved settings for the profile over to its new name.
+    if (typeof localStorage !== 'undefined') {
+      for (const prefix of PROFILE_SCOPED_STORAGE_PREFIXES) {
+        const value = localStorage.getItem(`${prefix}:${name}`);
+        if (value !== null) {
+          localStorage.setItem(`${prefix}:${renamed}`, value);
+          localStorage.removeItem(`${prefix}:${name}`);
+        }
+      }
+    }
     await get().loadProfiles();
   },
 
