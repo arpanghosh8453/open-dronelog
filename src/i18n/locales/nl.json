@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Gebruik de notatie JJJJ-MM-DD",
     "dateInFuture": "Datum kan niet in de toekomst liggen"
+  },
+  "manager": {
+    "menuItem": "Overzicht van alle profielen",
+    "title": "Alle profielen",
+    "intro": "Voer het hoofdwachtwoord in om de vluchttotalen van elk profiel op deze server te zien.",
+    "passwordRequired": "Voer het hoofdwachtwoord in.",
+    "open": "Openen",
+    "loading": "Laden…",
+    "refresh": "Vernieuwen",
+    "close": "Sluiten",
+    "profiles": "Profielen",
+    "profile": "Profiel",
+    "flights": "Vluchten",
+    "flightTime": "Vliegtijd",
+    "distance": "Afstand",
+    "photos": "Foto's",
+    "videos": "Video's",
+    "drones": "Drones",
+    "lastFlight": "Laatste vlucht",
+    "protected": "Met wachtwoord beveiligd",
+    "readError": "Dit profiel kon niet worden gelezen",
+    "noFlights": "Nog geen vluchten in dit profiel.",
+    "detail": "{{videos}} video's · {{batteries}} accu's · eerste vlucht {{first}}",
+    "droneFlights_one": "{{count}} vlucht",
+    "droneFlights_other": "{{count}} vluchten",
+    "readOnlyNote": "Alleen-lezen. Wissel via het profielmenu naar een profiel om de vluchten te openen."
   }
 }

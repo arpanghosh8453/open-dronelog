@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Utilisez le format AAAA-MM-JJ",
     "dateInFuture": "La date ne peut pas etre dans le futur"
+  },
+  "manager": {
+    "menuItem": "Vue d'ensemble des profils",
+    "title": "Tous les profils",
+    "intro": "Saisissez le mot de passe maître pour voir les totaux de vol de chaque profil de ce serveur.",
+    "passwordRequired": "Saisissez le mot de passe maître.",
+    "open": "Ouvrir",
+    "loading": "Chargement…",
+    "refresh": "Actualiser",
+    "close": "Fermer",
+    "profiles": "Profils",
+    "profile": "Profil",
+    "flights": "Vols",
+    "flightTime": "Temps de vol",
+    "distance": "Distance",
+    "photos": "Photos",
+    "videos": "Vidéos",
+    "drones": "Drones",
+    "lastFlight": "Dernier vol",
+    "protected": "Protégé par mot de passe",
+    "readError": "Impossible de lire ce profil",
+    "noFlights": "Aucun vol dans ce profil pour l'instant.",
+    "detail": "{{videos}} vidéos · {{batteries}} batteries · premier vol {{first}}",
+    "droneFlights_one": "{{count}} vol",
+    "droneFlights_other": "{{count}} vols",
+    "readOnlyNote": "Lecture seule. Pour ouvrir les vols d'un profil, basculez vers celui-ci depuis le menu des profils."
   }
 }

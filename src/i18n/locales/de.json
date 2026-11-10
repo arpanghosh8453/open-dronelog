@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Verwende das Format JJJJ-MM-TT",
     "dateInFuture": "Das Datum darf nicht in der Zukunft liegen"
+  },
+  "manager": {
+    "menuItem": "Übersicht aller Profile",
+    "title": "Alle Profile",
+    "intro": "Gib das Master-Passwort ein, um die Flugsummen aller Profile auf diesem Server zu sehen.",
+    "passwordRequired": "Gib das Master-Passwort ein.",
+    "open": "Öffnen",
+    "loading": "Wird geladen…",
+    "refresh": "Aktualisieren",
+    "close": "Schließen",
+    "profiles": "Profile",
+    "profile": "Profil",
+    "flights": "Flüge",
+    "flightTime": "Flugzeit",
+    "distance": "Distanz",
+    "photos": "Fotos",
+    "videos": "Videos",
+    "drones": "Drohnen",
+    "lastFlight": "Letzter Flug",
+    "protected": "Passwortgeschützt",
+    "readError": "Dieses Profil konnte nicht gelesen werden",
+    "noFlights": "In diesem Profil gibt es noch keine Flüge.",
+    "detail": "{{videos}} Videos · {{batteries}} Akkus · erster Flug {{first}}",
+    "droneFlights_one": "{{count}} Flug",
+    "droneFlights_other": "{{count}} Flüge",
+    "readOnlyNote": "Nur lesen. Um die Flüge eines Profils zu öffnen, wechsle im Profilmenü dorthin."
   }
 }

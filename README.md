@@ -352,6 +352,7 @@ When `KEEP_UPLOADED_FILES=true` is set, original log files are preserved in an `
 | `SYNC_INTERVAL` | (not set)              | Cron expression for scheduled sync (e.g., `0 0 */8 * * *` for every 8 hours)|
 | `KEEP_UPLOADED_FILES` | `true`      | When `true`, keeps copies of uploaded log files in the `uploaded` folder    |
 | `PROFILE_CREATION_PASS` | (not set) | Master password required for creating or deleting profiles in web/Docker mode. When unset, anyone can create and delete profiles. |
+| `MANAGER_OVERVIEW` | (not set) | Set to `true` to offer a read-only overview of every profile's flight totals, unlocked with the master password. Needs `PROFILE_CREATION_PASS`. |
 | `DEFAULT_PROFILE_PASSWORD` | (not set) | Optional one-time initializer for the `default` profile password at startup. If a default password already exists, it is not overwritten and startup logs that initialization was skipped. If unset or empty (and no existing password), the default profile remains unprotected. |
 | `SESSION_TTL_HOURS` | `24`           | Session token lifetime in hours. After expiry the user must re-authenticate. |
 
@@ -427,6 +428,16 @@ environment:
 ```
 
 When set, any create or delete operation must include the matching master password.
+
+### All-profiles overview for managers (web/Docker only, opt-in)
+
+For teams where one person looks after several pilots, set `MANAGER_OVERVIEW=true` together with `PROFILE_CREATION_PASS`. The profile menu then shows **All profiles overview**: combined flight totals on top and one row per profile underneath, which expands to show that profile's drones. The master password unlocks it, because the totals include password-protected profiles. It is read-only and stays off unless both variables are set.
+
+```yaml
+environment:
+  - PROFILE_CREATION_PASS=your-secret-master-password
+  - MANAGER_OVERVIEW=true
+```
 
 ## Security Warning (Web/Docker)
 

@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFlightStore } from '@/stores/flightStore';
 import { PasswordInput } from '@/components/ui/PasswordInput';
-import { isWebMode, hasMasterPassword } from '@/lib/api';
+import { isWebMode, hasMasterPassword, isManagerOverviewEnabled } from '@/lib/api';
+import { ManagerOverview } from './ManagerOverview';
 
 export function ProfileSelector() {
   const { t } = useTranslation();
@@ -41,6 +42,10 @@ export function ProfileSelector() {
   const [masterRequired, setMasterRequired] = useState(false);
   const [masterPasswordVal, setMasterPasswordVal] = useState('');
 
+  // Manager overview (opt-in on the server)
+  const [managerEnabled, setManagerEnabled] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const passRef = useRef<HTMLInputElement>(null);
@@ -49,6 +54,7 @@ export function ProfileSelector() {
   useEffect(() => {
     if (isWebMode()) {
       hasMasterPassword().then(setMasterRequired).catch(() => setMasterRequired(false));
+      isManagerOverviewEnabled().then(setManagerEnabled);
     }
   }, []);
 
@@ -475,6 +481,21 @@ export function ProfileSelector() {
             </>
           )}
 
+          {/* Manager overview */}
+          {managerEnabled && (
+            <div className="border-t border-gray-700/50">
+              <button
+                onClick={() => { closeAll(); setManagerOpen(true); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                {t('manager.menuItem')}
+              </button>
+            </div>
+          )}
+
           {/* Log out */}
           <div className="border-t border-gray-700/50">
             <button
@@ -489,6 +510,7 @@ export function ProfileSelector() {
           </div>
         </div>
       )}
+      {managerOpen && <ManagerOverview onClose={() => setManagerOpen(false)} />}
     </div>
   );
 }

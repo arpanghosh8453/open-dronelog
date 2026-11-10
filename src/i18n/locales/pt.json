@@ -802,5 +802,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Use o formato AAAA-MM-DD",
     "dateInFuture": "A data nao pode estar no futuro"
+  },
+  "manager": {
+    "menuItem": "Visão geral de todos os perfis",
+    "title": "Todos os perfis",
+    "intro": "Digite a senha mestra para ver os totais de voo de cada perfil neste servidor.",
+    "passwordRequired": "Digite a senha mestra.",
+    "open": "Abrir",
+    "loading": "Carregando…",
+    "refresh": "Atualizar",
+    "close": "Fechar",
+    "profiles": "Perfis",
+    "profile": "Perfil",
+    "flights": "Voos",
+    "flightTime": "Tempo de voo",
+    "distance": "Distância",
+    "photos": "Fotos",
+    "videos": "Vídeos",
+    "drones": "Drones",
+    "lastFlight": "Último voo",
+    "protected": "Protegido por senha",
+    "readError": "Não foi possível ler este perfil",
+    "noFlights": "Ainda não há voos neste perfil.",
+    "detail": "{{videos}} vídeos · {{batteries}} baterias · primeiro voo {{first}}",
+    "droneFlights_one": "{{count}} voo",
+    "droneFlights_other": "{{count}} voos",
+    "readOnlyNote": "Somente leitura. Para abrir os voos de um perfil, mude para ele no menu de perfis."
   }
 }

@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD 형식을 사용하세요",
     "dateInFuture": "날짜는 미래일 수 없습니다"
+  },
+  "manager": {
+    "menuItem": "전체 프로필 개요",
+    "title": "전체 프로필",
+    "intro": "마스터 비밀번호를 입력하면 이 서버의 모든 프로필 비행 합계를 볼 수 있습니다.",
+    "passwordRequired": "마스터 비밀번호를 입력하세요.",
+    "open": "열기",
+    "loading": "불러오는 중…",
+    "refresh": "새로 고침",
+    "close": "닫기",
+    "profiles": "프로필",
+    "profile": "프로필",
+    "flights": "비행",
+    "flightTime": "비행 시간",
+    "distance": "거리",
+    "photos": "사진",
+    "videos": "동영상",
+    "drones": "드론",
+    "lastFlight": "마지막 비행",
+    "protected": "비밀번호 보호됨",
+    "readError": "이 프로필을 읽을 수 없습니다",
+    "noFlights": "이 프로필에는 아직 비행이 없습니다.",
+    "detail": "동영상 {{videos}}개 · 배터리 {{batteries}}개 · 첫 비행 {{first}}",
+    "droneFlights_one": "{{count}}회 비행",
+    "droneFlights_other": "{{count}}회 비행",
+    "readOnlyNote": "읽기 전용입니다. 프로필의 비행을 열려면 프로필 메뉴에서 전환하세요."
   }
 }

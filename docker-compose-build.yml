@@ -28,6 +28,8 @@ services:
       # - SESSION_TTL_HOURS=24
       # Uncomment to require a master password for creating new profiles
       # - PROFILE_CREATION_PASS=your_master_password_here
+      # Uncomment to show managers an overview of all profiles (needs PROFILE_CREATION_PASS)
+      # - MANAGER_OVERVIEW=true
       # Optional: set initial password for the default profile on first startup.
       # This is only applied when the default profile does not already have a password.
       # - DEFAULT_PROFILE_PASSWORD=your_default_profile_password_here
