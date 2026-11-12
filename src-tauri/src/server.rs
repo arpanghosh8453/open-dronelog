@@ -31,6 +31,9 @@ use crate::session_store::SessionStore;
 #[derive(Clone)]
 pub struct WebAppState {
     databases: Arc<std::sync::RwLock<HashMap<String, Arc<Database>>>>,
+    /// Held while a profile database is being opened, so two requests that
+    /// arrive together can't both open the same DuckDB file.
+    opening: Arc<std::sync::Mutex<()>>,
     pub data_dir: PathBuf,
     pub sessions: Arc<SessionStore>,
     /// Argon2id hash of PROFILE_CREATION_PASS (None if env var not set).
@@ -47,16 +50,22 @@ impl WebAppState {
                 return Ok(db.clone());
             }
         }
-        // Slow path — open the database and cache it
+        // Slow path — open the database and cache it, one opener at a time.
+        // Opening the same file twice fails, and that failure used to send
+        // Database::new into its recovery path, which moves the real
+        // database aside and starts an empty one.
+        let _opening = self.opening.lock().unwrap_or_else(|e| e.into_inner());
+        // Another request may have opened it while we waited.
+        if let Some(db) = self.databases.read().unwrap().get(profile) {
+            return Ok(db.clone());
+        }
         let new_db = Database::new(self.data_dir.clone(), profile)
             .map_err(|e| format!("Failed to open profile '{}': {}", profile, e))?;
         let db = Arc::new(new_db);
-        let mut dbs = self.databases.write().unwrap();
-        // Double-check: another thread might have opened it in the meantime
-        if let Some(existing) = dbs.get(profile) {
-            return Ok(existing.clone());
-        }
-        dbs.insert(profile.to_string(), db.clone());
+        self.databases
+            .write()
+            .unwrap()
+            .insert(profile.to_string(), db.clone());
         Ok(db)
     }
 
@@ -2414,6 +2423,7 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
 
     let state = WebAppState {
         databases: Arc::new(std::sync::RwLock::new(initial_pool)),
+        opening: Arc::new(std::sync::Mutex::new(())),
         data_dir,
         sessions: Arc::new(SessionStore::new()),
         master_password_hash,
