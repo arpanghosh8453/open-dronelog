@@ -21,7 +21,7 @@
     "wrongPassword": "Helytelen jelszó. Kérjük, próbálja újra."
   },
   "dashboard": {
-    "individual": "Egyedi",
+    "individual": "Repülések",
     "overview": "Áttekintés",
     "import": "Importálás",
     "importExpand": "Importálás — kattintson a kibontáshoz",

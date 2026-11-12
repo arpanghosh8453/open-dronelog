@@ -21,7 +21,7 @@
     "wrongPassword": "비밀번호가 올바르지 않습니다. 다시 시도해 주세요."
   },
   "dashboard": {
-    "individual": "개별",
+    "individual": "비행",
     "overview": "개요",
     "import": "가져오기",
     "importExpand": "가져오기 — 클릭하여 펼치기",

@@ -21,7 +21,7 @@
     "wrongPassword": "密码不正确。请重试。"
   },
   "dashboard": {
-    "individual": "单项",
+    "individual": "飞行记录",
     "overview": "概览",
     "import": "导入",
     "importExpand": "导入 — 点击展开",

@@ -21,7 +21,7 @@
     "wrongPassword": "Неверный пароль. Попробуйте ещё раз."
   },
   "dashboard": {
-    "individual": "Индивидуально",
+    "individual": "Полёты",
     "overview": "Обзор",
     "import": "Импорт",
     "importExpand": "Импорт — нажмите, чтобы раскрыть",
