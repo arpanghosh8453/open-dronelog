@@ -2054,13 +2054,33 @@ impl Database {
             return Ok(());
         }
         let conn = self.conn.lock().unwrap();
-        for msg in messages {
-            // Use INSERT OR IGNORE to avoid duplicate key errors
+        // Some logs carry 10,000+ app messages. Inserting them row by row took minutes while
+        // holding the profile's connection, stalling every other request for that profile.
+        // Append them to a constraint-free staging table instead, then copy them over in one
+        // statement; INSERT OR IGNORE still skips rows that would break the primary key.
+        conn.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS flight_messages_staging (
+                flight_id BIGINT, timestamp_ms BIGINT, message_type VARCHAR, message VARCHAR
+            );
+            DELETE FROM flight_messages_staging;",
+        )?;
+        let result = (|| -> Result<(), DatabaseError> {
+            {
+                let mut appender = conn.appender("flight_messages_staging")?;
+                for msg in messages {
+                    appender.append_row(params![flight_id, msg.timestamp_ms, msg.message_type, msg.message])?;
+                }
+                appender.flush()?;
+            }
             conn.execute(
-                "INSERT OR IGNORE INTO flight_messages (flight_id, timestamp_ms, message_type, message) VALUES (?, ?, ?, ?)",
-                params![flight_id, msg.timestamp_ms, msg.message_type, msg.message],
+                "INSERT OR IGNORE INTO flight_messages (flight_id, timestamp_ms, message_type, message)
+                 SELECT DISTINCT flight_id, timestamp_ms, message_type, message FROM flight_messages_staging",
+                params![],
             )?;
-        }
+            Ok(())
+        })();
+        let _ = conn.execute("DELETE FROM flight_messages_staging", params![]);
+        result?;
         log::debug!("Inserted {} messages for flight {}", messages.len(), flight_id);
         Ok(())
     }
