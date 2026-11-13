@@ -2194,6 +2194,144 @@ async fn has_master_password(
 }
 
 // ============================================================================
+// MANAGER OVERVIEW (opt-in, web/Docker only)
+// ============================================================================
+//
+// A read-only summary of every profile on the server, for teams where one
+// person looks after several pilots. Off unless MANAGER_OVERVIEW=true, and it
+// also needs PROFILE_CREATION_PASS: the master password is what unlocks it,
+// because the overview shows totals from password-protected profiles too.
+// Profiles are read one at a time through the normal connection pool, so no
+// DuckDB file is ever opened twice.
+
+/// Key used for manager-overview lockout. It contains a space, so it can
+/// never collide with a real profile name.
+const MANAGER_LOCKOUT_KEY: &str = "manager overview";
+
+fn manager_overview_flag() -> bool {
+    std::env::var("MANAGER_OVERVIEW")
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn manager_overview_enabled(state: &WebAppState) -> bool {
+    manager_overview_flag() && state.master_password_hash.is_some()
+}
+
+/// GET /api/manager/enabled — whether the manager overview can be opened.
+async fn manager_overview_status(
+    AxumState(state): AxumState<WebAppState>,
+) -> Json<bool> {
+    Json(manager_overview_enabled(&state))
+}
+
+#[derive(Deserialize)]
+struct ManagerOverviewPayload {
+    master_password: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagerProfileSummary {
+    name: String,
+    has_password: bool,
+    /// Set when this profile's database could not be read.
+    error: Option<String>,
+    total_flights: i64,
+    total_duration_secs: f64,
+    total_distance_m: f64,
+    total_photos: i64,
+    total_videos: i64,
+    max_altitude_m: f64,
+    battery_count: usize,
+    first_flight_date: Option<String>,
+    last_flight_date: Option<String>,
+    drones: Vec<crate::models::DroneUsage>,
+}
+
+impl ManagerProfileSummary {
+    fn empty(name: String, has_password: bool) -> Self {
+        Self {
+            name,
+            has_password,
+            error: None,
+            total_flights: 0,
+            total_duration_secs: 0.0,
+            total_distance_m: 0.0,
+            total_photos: 0,
+            total_videos: 0,
+            max_altitude_m: 0.0,
+            battery_count: 0,
+            first_flight_date: None,
+            last_flight_date: None,
+            drones: Vec::new(),
+        }
+    }
+}
+
+fn summarize_profile(state: &WebAppState, name: String) -> ManagerProfileSummary {
+    let has_password = profile_auth::has_password(&state.data_dir, &name);
+    let mut summary = ManagerProfileSummary::empty(name.clone(), has_password);
+    let stats = state
+        .db_for_profile(&name)
+        .and_then(|db| db.get_overview_stats().map_err(|e| e.to_string()));
+    match stats {
+        Ok(s) => {
+            summary.total_flights = s.total_flights;
+            summary.total_duration_secs = s.total_duration_secs;
+            summary.total_distance_m = s.total_distance_m;
+            summary.total_photos = s.total_photos;
+            summary.total_videos = s.total_videos;
+            summary.max_altitude_m = s.max_altitude_m;
+            summary.battery_count = s.batteries_used.len();
+            summary.first_flight_date = s.flights_by_date.iter().map(|d| d.date.clone()).min();
+            summary.last_flight_date = s.flights_by_date.iter().map(|d| d.date.clone()).max();
+            summary.drones = s.drones_used;
+        }
+        Err(e) => {
+            log::warn!("Manager overview: could not read profile '{}': {}", name, e);
+            summary.error = Some(e);
+        }
+    }
+    summary
+}
+
+/// POST /api/manager/overview — totals for every profile. Needs the master password.
+async fn manager_overview(
+    AxumState(state): AxumState<WebAppState>,
+    Json(payload): Json<ManagerOverviewPayload>,
+) -> Result<Json<Vec<ManagerProfileSummary>>, (StatusCode, Json<ErrorResponse>)> {
+    if !manager_overview_enabled(&state) {
+        return Err(err_response(StatusCode::NOT_FOUND, "The manager overview is not enabled on this server"));
+    }
+    if state.sessions.is_locked_out(MANAGER_LOCKOUT_KEY) {
+        return Err(err_response(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many failed attempts — please wait 60 seconds",
+        ));
+    }
+    let hash = state.master_password_hash.clone().unwrap_or_default();
+    if !profile_auth::verify_password(&payload.master_password, &hash) {
+        if state.sessions.record_failure(MANAGER_LOCKOUT_KEY) {
+            log::warn!("Manager overview locked out after too many failed attempts");
+        }
+        // 403, not 401: a 401 makes the web client drop the profile session.
+        return Err(err_response(StatusCode::FORBIDDEN, "Invalid master password"));
+    }
+
+    let summaries = tokio::task::spawn_blocking(move || {
+        database::list_profiles(&state.data_dir)
+            .into_iter()
+            .map(|name| summarize_profile(&state, name))
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Manager overview failed: {}", e)))?;
+
+    Ok(Json(summaries))
+}
+
+// ============================================================================
 // SUPPORTER BADGE (server-side verification)
 // ============================================================================
 
@@ -2350,6 +2488,8 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/profiles/set_password", post(set_profile_password))
         .route("/api/profiles/remove_password", post(remove_profile_password))
         .route("/api/profiles/has_master_password", get(has_master_password))
+        .route("/api/manager/enabled", get(manager_overview_status))
+        .route("/api/manager/overview", post(manager_overview))
         .route("/api/supporter/verify", post(verify_supporter_code))
         .route("/api/supporter/status", get(get_supporter_status))
         .route("/api/supporter/remove", post(remove_supporter_badge))
@@ -2420,6 +2560,13 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
         }
         _ => None,
     };
+    if manager_overview_flag() {
+        if master_password_hash.is_some() {
+            log::info!("Manager overview enabled (MANAGER_OVERVIEW)");
+        } else {
+            log::warn!("MANAGER_OVERVIEW is set but PROFILE_CREATION_PASS is not; the manager overview stays off");
+        }
+    }
 
     let state = WebAppState {
         databases: Arc::new(std::sync::RwLock::new(initial_pool)),

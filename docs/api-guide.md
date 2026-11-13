@@ -191,12 +191,15 @@ All data operations use the active profile. In web/Docker mode, the active profi
 | POST | `/api/profiles/set_password` | Set or change profile password. Body: `{ profile, new_password, current_password?, session? }` |
 | POST | `/api/profiles/remove_password` | Remove profile password. Body: `{ profile, current_password }` |
 | GET | `/api/profiles/has_master_password` | Check if `PROFILE_CREATION_PASS` env var is configured. Returns boolean. |
+| GET | `/api/manager/enabled` | Whether the all-profiles overview is available (`MANAGER_OVERVIEW=true` and `PROFILE_CREATION_PASS` set). Returns boolean. |
+| POST | `/api/manager/overview` | Flight totals for every profile. Body: `{ master_password }`. Returns 404 when disabled, 403 for a wrong password, 429 during lockout. |
 
 ### Profile Security Environment Variables (Web/Docker)
 
 | Variable | Description |
 |----------|-------------|
 | `PROFILE_CREATION_PASS` | Requires a master password to create/delete profiles. |
+| `MANAGER_OVERVIEW` | Set to `true` to enable the read-only all-profiles overview, unlocked with the master password. Needs `PROFILE_CREATION_PASS`. |
 | `DEFAULT_PROFILE_PASSWORD` | Optional one-time initializer for the `default` profile password at startup. If `default` already has a password, initialization is skipped and the existing password is preserved. If unset or empty (and no existing password), `default` remains unprotected. |
 | `SESSION_TTL_HOURS` | Session lifetime after successful profile authentication. |
 

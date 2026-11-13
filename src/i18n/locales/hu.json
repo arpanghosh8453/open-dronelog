@@ -812,5 +812,31 @@
     "dateJumpPlaceholder": "ÉÉÉÉ-HH-NN",
     "useDateFormat": "Használjon ÉÉÉÉ-HH-NN formátumot",
     "dateInFuture": "A dátum nem lehet a jövőbeni"
+  },
+  "manager": {
+    "menuItem": "Összes profil áttekintése",
+    "title": "Összes profil",
+    "intro": "Add meg a mesterjelszót, hogy lásd a szerver összes profiljának repülési összesítőit.",
+    "passwordRequired": "Add meg a mesterjelszót.",
+    "open": "Megnyitás",
+    "loading": "Betöltés…",
+    "refresh": "Frissítés",
+    "close": "Bezárás",
+    "profiles": "Profilok",
+    "profile": "Profil",
+    "flights": "Repülések",
+    "flightTime": "Repülési idő",
+    "distance": "Távolság",
+    "photos": "Fotók",
+    "videos": "Videók",
+    "drones": "Drónok",
+    "lastFlight": "Utolsó repülés",
+    "protected": "Jelszóval védett",
+    "readError": "Ez a profil nem olvasható",
+    "noFlights": "Ebben a profilban még nincs repülés.",
+    "detail": "{{videos}} videó · {{batteries}} akkumulátor · első repülés {{first}}",
+    "droneFlights_one": "{{count}} repülés",
+    "droneFlights_other": "{{count}} repülés",
+    "readOnlyNote": "Csak olvasható. Egy profil repüléseinek megnyitásához válts rá a profilmenüben."
   }
 }

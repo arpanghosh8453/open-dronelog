@@ -805,5 +805,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Uzyj formatu RRRR-MM-DD",
     "dateInFuture": "Data nie moze byc z przyszlosci"
+  },
+  "manager": {
+    "menuItem": "Przegląd wszystkich profili",
+    "title": "Wszystkie profile",
+    "intro": "Wpisz hasło główne, aby zobaczyć sumy lotów wszystkich profili na tym serwerze.",
+    "passwordRequired": "Wpisz hasło główne.",
+    "open": "Otwórz",
+    "loading": "Wczytywanie…",
+    "refresh": "Odśwież",
+    "close": "Zamknij",
+    "profiles": "Profile",
+    "profile": "Profil",
+    "flights": "Loty",
+    "flightTime": "Czas lotu",
+    "distance": "Dystans",
+    "photos": "Zdjęcia",
+    "videos": "Filmy",
+    "drones": "Drony",
+    "lastFlight": "Ostatni lot",
+    "protected": "Chroniony hasłem",
+    "readError": "Nie udało się odczytać tego profilu",
+    "noFlights": "Ten profil nie ma jeszcze lotów.",
+    "detail": "Filmy: {{videos}} · baterie: {{batteries}} · pierwszy lot {{first}}",
+    "droneFlights_one": "{{count}} lot",
+    "droneFlights_other": "{{count}} lotów",
+    "readOnlyNote": "Tylko do odczytu. Aby otworzyć loty profilu, przełącz się na niego w menu profili."
   }
 }

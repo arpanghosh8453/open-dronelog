@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD形式で入力してください",
     "dateInFuture": "日付は未来にできません"
+  },
+  "manager": {
+    "menuItem": "全プロファイルの概要",
+    "title": "全プロファイル",
+    "intro": "マスターパスワードを入力すると、このサーバー上の全プロファイルの飛行合計を表示します。",
+    "passwordRequired": "マスターパスワードを入力してください。",
+    "open": "開く",
+    "loading": "読み込み中…",
+    "refresh": "更新",
+    "close": "閉じる",
+    "profiles": "プロファイル",
+    "profile": "プロファイル",
+    "flights": "フライト",
+    "flightTime": "飛行時間",
+    "distance": "距離",
+    "photos": "写真",
+    "videos": "動画",
+    "drones": "ドローン",
+    "lastFlight": "最終フライト",
+    "protected": "パスワード保護",
+    "readError": "このプロファイルを読み込めませんでした",
+    "noFlights": "このプロファイルにはまだフライトがありません。",
+    "detail": "動画 {{videos}} 本 · バッテリー {{batteries}} 個 · 初回フライト {{first}}",
+    "droneFlights_one": "{{count}} フライト",
+    "droneFlights_other": "{{count}} フライト",
+    "readOnlyNote": "閲覧専用です。プロファイルのフライトを開くには、プロファイルメニューから切り替えてください。"
   }
 }

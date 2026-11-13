@@ -812,5 +812,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD formatını kullanın",
     "dateInFuture": "Tarih gelecekte olamaz."
+  },
+  "manager": {
+    "menuItem": "Tüm profillere genel bakış",
+    "title": "Tüm profiller",
+    "intro": "Bu sunucudaki her profilin uçuş toplamlarını görmek için ana parolayı girin.",
+    "passwordRequired": "Ana parolayı girin.",
+    "open": "Aç",
+    "loading": "Yükleniyor…",
+    "refresh": "Yenile",
+    "close": "Kapat",
+    "profiles": "Profiller",
+    "profile": "Profil",
+    "flights": "Uçuşlar",
+    "flightTime": "Uçuş süresi",
+    "distance": "Mesafe",
+    "photos": "Fotoğraflar",
+    "videos": "Videolar",
+    "drones": "Dronlar",
+    "lastFlight": "Son uçuş",
+    "protected": "Parola korumalı",
+    "readError": "Bu profil okunamadı",
+    "noFlights": "Bu profilde henüz uçuş yok.",
+    "detail": "{{videos}} video · {{batteries}} batarya · ilk uçuş {{first}}",
+    "droneFlights_one": "{{count}} uçuş",
+    "droneFlights_other": "{{count}} uçuş",
+    "readOnlyNote": "Salt okunur. Bir profilin uçuşlarını açmak için profil menüsünden ona geçin."
   }
 }

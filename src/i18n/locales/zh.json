@@ -809,5 +809,31 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "请使用 YYYY-MM-DD 格式",
     "dateInFuture": "日期不能是未来时间"
+  },
+  "manager": {
+    "menuItem": "所有配置文件概览",
+    "title": "所有配置文件",
+    "intro": "输入主密码即可查看此服务器上每个配置文件的飞行总计。",
+    "passwordRequired": "请输入主密码。",
+    "open": "打开",
+    "loading": "加载中…",
+    "refresh": "刷新",
+    "close": "关闭",
+    "profiles": "配置文件",
+    "profile": "配置文件",
+    "flights": "飞行",
+    "flightTime": "飞行时间",
+    "distance": "距离",
+    "photos": "照片",
+    "videos": "视频",
+    "drones": "无人机",
+    "lastFlight": "最近飞行",
+    "protected": "受密码保护",
+    "readError": "无法读取此配置文件",
+    "noFlights": "此配置文件中还没有飞行记录。",
+    "detail": "{{videos}} 个视频 · {{batteries}} 块电池 · 首次飞行 {{first}}",
+    "droneFlights_one": "{{count}} 次飞行",
+    "droneFlights_other": "{{count}} 次飞行",
+    "readOnlyNote": "只读。要打开某个配置文件的飞行记录，请在配置文件菜单中切换到它。"
   }
 }

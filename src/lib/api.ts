@@ -10,7 +10,7 @@
  * - "web"  (set when building for Docker/web deployment)
  */
 
-import type { Flight, FlightDataResponse, FlightTag, ImportResult, OverviewStats } from '@/types';
+import type { DroneUsage, Flight, FlightDataResponse, FlightTag, ImportResult, OverviewStats } from '@/types';
 
 const isWeb = import.meta.env.VITE_BACKEND === 'web';
 
@@ -1231,6 +1231,43 @@ export async function hasMasterPassword(): Promise<boolean> {
   }
   // Tauri desktop doesn't use master password
   return false;
+}
+
+// ── Manager overview (Web/Docker only, opt-in via MANAGER_OVERVIEW) ──
+
+export interface ManagerProfileSummary {
+  name: string;
+  hasPassword: boolean;
+  /** Set when the server could not read this profile's database. */
+  error: string | null;
+  totalFlights: number;
+  totalDurationSecs: number;
+  totalDistanceM: number;
+  totalPhotos: number;
+  totalVideos: number;
+  maxAltitudeM: number;
+  batteryCount: number;
+  firstFlightDate: string | null;
+  lastFlightDate: string | null;
+  drones: DroneUsage[];
+}
+
+/** Whether this server offers the all-profiles manager overview. */
+export async function isManagerOverviewEnabled(): Promise<boolean> {
+  if (!isWeb) return false;
+  try {
+    return await fetchJson<boolean>('/manager/enabled');
+  } catch {
+    return false;
+  }
+}
+
+/** Totals for every profile on the server. Needs the master password. */
+export async function getManagerOverview(masterPassword: string): Promise<ManagerProfileSummary[]> {
+  return fetchJson<ManagerProfileSummary[]>('/manager/overview', {
+    method: 'POST',
+    body: JSON.stringify({ master_password: masterPassword }),
+  });
 }
 
 // ── Auto-logout (Tauri desktop only) ──
