@@ -812,5 +812,19 @@
     "dateJumpPlaceholder": "ÉÉÉÉ-HH-NN",
     "useDateFormat": "Használjon ÉÉÉÉ-HH-NN formátumot",
     "dateInFuture": "A dátum nem lehet a jövőbeni"
+  },
+  "photoRecount": {
+    "title": "A fotók számlálása javítva",
+    "whatChanged": "A korábbi verziók kevesebbnek számolták a gyors egymásutánban készült fotókat (például térképező repüléseknél), és egyes gépeknél, például a Matrice 4E-nél 0 fotót mutattak. Az új importálások már helyesen számolódnak.",
+    "offer": "Az Open DroneLog újraszámolhatja a profil meglévő DJI-repüléseit ({{count}}) a DJI által minden eredeti naplóba mentett fotószám alapján. Az értékek csak nőhetnek, sosem csökkennek.",
+    "originalsNote": "Ehhez az eredeti naplófájlok kellenek, így csak azoknál a repüléseknél működik, amelyek fájljait megőrizték („Feltöltött fájlok megőrzése” vagy Dockerben KEEP_UPLOADED_FILES). A többi repülés megtartja a jelenlegi értékét.",
+    "recountNow": "Újraszámolás most",
+    "later": "Emlékeztess később",
+    "dontAsk": "Ne kérdezd újra",
+    "running": "Fotók újraszámolása… {{total}} repülésből {{done}} ellenőrizve",
+    "finished": "Kész. Javított fotószámú repülések: {{count}}.",
+    "missing": "Megőrzött eredeti napló nélküli repülések (változatlan): {{count}}.",
+    "failed": "Az újraszámolás sikertelen: {{error}}",
+    "close": "Bezárás"
   }
 }

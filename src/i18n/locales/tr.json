@@ -812,5 +812,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD formatını kullanın",
     "dateInFuture": "Tarih gelecekte olamaz."
+  },
+  "photoRecount": {
+    "title": "Fotoğraf sayımı düzeltildi",
+    "whatChanged": "Önceki sürümler art arda hızlı çekilen fotoğrafları (örneğin haritalama görevlerinde) eksik sayıyor ve Matrice 4E gibi bazı araçlarda 0 fotoğraf gösteriyordu. Yeni içe aktarmalar artık doğru sayılıyor.",
+    "offer": "Open DroneLog, bu profildeki mevcut DJI uçuşlarını ({{count}}) DJI'nin her orijinal kayda kaydettiği fotoğraf sayısını kullanarak yeniden sayabilir. Sayılar yalnızca artar, asla azalmaz.",
+    "originalsNote": "Bunun için orijinal kayıt dosyaları gerekir; bu nedenle yalnızca dosyaları saklanan uçuşlarda çalışır (\"Yüklenen dosyaları sakla\" veya Docker'da KEEP_UPLOADED_FILES). Diğer uçuşlar mevcut sayısını korur.",
+    "recountNow": "Şimdi yeniden say",
+    "later": "Daha sonra hatırlat",
+    "dontAsk": "Bir daha sorma",
+    "running": "Fotoğraflar yeniden sayılıyor… {{total}} uçuştan {{done}} tanesi kontrol edildi",
+    "finished": "Tamamlandı. Fotoğraf sayısı düzeltilen uçuşlar: {{count}}.",
+    "missing": "Orijinal kaydı saklanmamış uçuşlar (değişmedi): {{count}}.",
+    "failed": "Yeniden sayma başarısız oldu: {{error}}",
+    "close": "Kapat"
   }
 }

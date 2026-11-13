@@ -1430,6 +1430,41 @@
         Ok(true)
     }
 
+    // ── One-time photo recount ──
+
+    #[tauri::command]
+    pub async fn get_photo_recount_status(state: State<'_, AppState>) -> Result<crate::recount::RecountStatus, String> {
+        let db = state.db_authenticated()?;
+        crate::recount::status(&db)
+    }
+
+    /// Recount one batch of flights from their kept original logs; repeat with `next_offset`.
+    #[tauri::command]
+    pub async fn run_photo_recount(
+        offset: usize,
+        limit: Option<usize>,
+        state: State<'_, AppState>,
+    ) -> Result<crate::recount::RecountChunk, String> {
+        let db = state.db_authenticated()?;
+        let config = crate::models::load_profile_config(&state.config_path());
+        let folder = config
+            .get("uploaded_files_path")
+            .and_then(|v| v.as_str())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state.default_upload_folder());
+        let limit = limit.unwrap_or(25).min(200);
+        tokio::task::spawn_blocking(move || crate::recount::run_chunk(&db, &[folder], offset, limit))
+            .await
+            .map_err(|e| e.to_string())?
+    }
+
+    #[tauri::command]
+    pub async fn dismiss_photo_recount(state: State<'_, AppState>) -> Result<bool, String> {
+        let db = state.db_authenticated()?;
+        crate::recount::dismiss(&db)?;
+        Ok(true)
+    }
+
     #[tauri::command]
     pub async fn set_profile_password(
         profile: String,
@@ -1731,6 +1766,9 @@
                 get_active_profile,
                 switch_profile,
                 delete_profile,
+                get_photo_recount_status,
+                run_photo_recount,
+                dismiss_photo_recount,
                 set_profile_password,
                 remove_profile_password,
                 verify_supporter_code,

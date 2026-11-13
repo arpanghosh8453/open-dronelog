@@ -809,5 +809,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD形式で入力してください",
     "dateInFuture": "日付は未来にできません"
+  },
+  "photoRecount": {
+    "title": "写真枚数のカウントを修正しました",
+    "whatChanged": "以前のバージョンでは、短い間隔で連続撮影した写真（マッピングミッションなど）が少なく数えられ、Matrice 4E など一部の機体では 0 枚と表示されていました。新しくインポートしたフライトは正しくカウントされます。",
+    "offer": "Open DroneLog は、DJI が各元ログに保存している写真枚数を使って、このプロフィールの既存の DJI フライト（{{count}} 件）を再カウントできます。枚数は増えることはあっても減ることはありません。",
+    "originalsNote": "元のログファイルが必要なため、ファイルが保存されているフライトのみが対象です（「アップロードしたファイルを保持」または Docker の KEEP_UPLOADED_FILES）。それ以外のフライトは現在の枚数のままです。",
+    "recountNow": "今すぐ再カウント",
+    "later": "後で通知",
+    "dontAsk": "今後表示しない",
+    "running": "写真を再カウント中… {{total}} 件中 {{done}} 件を確認",
+    "finished": "完了しました。写真枚数を修正したフライト: {{count}} 件",
+    "missing": "元ログが保存されていないフライト（変更なし）: {{count}} 件",
+    "failed": "再カウントに失敗しました: {{error}}",
+    "close": "閉じる"
   }
 }

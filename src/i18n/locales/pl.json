@@ -805,5 +805,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Uzyj formatu RRRR-MM-DD",
     "dateInFuture": "Data nie moze byc z przyszlosci"
+  },
+  "photoRecount": {
+    "title": "Liczenie zdjęć zostało poprawione",
+    "whatChanged": "Wcześniejsze wersje zaniżały liczbę zdjęć robionych w szybkich odstępach (np. podczas misji mapowania) i pokazywały 0 zdjęć dla niektórych dronów, takich jak Matrice 4E. Nowe importy są już liczone poprawnie.",
+    "offer": "Open DroneLog może ponownie policzyć loty DJI w tym profilu ({{count}}) na podstawie liczby zdjęć zapisanej przez DJI w każdym oryginalnym logu. Wartości mogą tylko wzrosnąć, nigdy zmaleć.",
+    "originalsNote": "Wymaga to oryginalnych plików logów, więc działa tylko dla lotów, których pliki zostały zachowane („Zachowuj przesłane pliki” lub KEEP_UPLOADED_FILES w Dockerze). Pozostałe loty zachowują obecną wartość.",
+    "recountNow": "Policz ponownie teraz",
+    "later": "Przypomnij później",
+    "dontAsk": "Nie pytaj więcej",
+    "running": "Ponowne liczenie zdjęć… sprawdzono {{done}} z {{total}} lotów",
+    "finished": "Gotowe. Loty z poprawioną liczbą zdjęć: {{count}}.",
+    "missing": "Loty bez zachowanego oryginalnego logu (bez zmian): {{count}}.",
+    "failed": "Ponowne liczenie nie powiodło się: {{error}}",
+    "close": "Zamknij"
   }
 }

@@ -22,6 +22,7 @@ mod models;
 mod parser;
 mod plugins;
 mod profile_auth;
+mod recount;
 
 #[cfg(all(feature = "web", not(feature = "tauri-app")))]
 mod server;

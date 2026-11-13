@@ -809,5 +809,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "YYYY-MM-DD 형식을 사용하세요",
     "dateInFuture": "날짜는 미래일 수 없습니다"
+  },
+  "photoRecount": {
+    "title": "사진 수 집계가 수정되었습니다",
+    "whatChanged": "이전 버전에서는 짧은 간격으로 연속 촬영한 사진(예: 매핑 임무)을 적게 집계했고, Matrice 4E 같은 일부 기체에서는 사진이 0장으로 표시되었습니다. 새로 가져오는 비행은 이제 올바르게 집계됩니다.",
+    "offer": "Open DroneLog는 DJI가 각 원본 로그에 저장한 사진 수를 사용해 이 프로필의 기존 DJI 비행({{count}}개)을 다시 집계할 수 있습니다. 값은 늘어나기만 하고 줄어들지 않습니다.",
+    "originalsNote": "원본 로그 파일이 필요하므로 파일이 보관된 비행에만 적용됩니다(\"업로드한 파일 보관\" 또는 Docker의 KEEP_UPLOADED_FILES). 그 외 비행은 현재 값을 유지합니다.",
+    "recountNow": "지금 다시 집계",
+    "later": "나중에 알림",
+    "dontAsk": "다시 묻지 않기",
+    "running": "사진 다시 집계 중… {{total}}개 중 {{done}}개 비행 확인",
+    "finished": "완료되었습니다. 사진 수가 수정된 비행: {{count}}개",
+    "missing": "원본 로그가 보관되지 않은 비행(변경 없음): {{count}}개",
+    "failed": "다시 집계하지 못했습니다: {{error}}",
+    "close": "닫기"
   }
 }

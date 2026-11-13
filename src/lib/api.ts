@@ -1178,6 +1178,47 @@ export async function deleteProfile(opts: DeleteProfileOptions): Promise<boolean
   return invoke('delete_profile', { name: opts.name, password: opts.password || null }) as Promise<boolean>;
 }
 
+// ── One-time photo recount ──
+
+export interface PhotoRecountStatus {
+  /** "pending", "done" or "dismissed" */
+  state: string;
+  djiFlights: number;
+}
+
+export interface PhotoRecountChunk {
+  processed: number;
+  updated: number;
+  missing: number;
+  total: number;
+  nextOffset: number;
+  done: boolean;
+}
+
+export async function getPhotoRecountStatus(): Promise<PhotoRecountStatus> {
+  if (isWeb) return fetchJson<PhotoRecountStatus>('/maintenance/photo_recount');
+  const invoke = await getTauriInvoke();
+  return invoke('get_photo_recount_status') as Promise<PhotoRecountStatus>;
+}
+
+/** Recount one batch; call again with `nextOffset` until `done`. */
+export async function runPhotoRecount(offset: number, limit = 25): Promise<PhotoRecountChunk> {
+  if (isWeb) {
+    return fetchJson<PhotoRecountChunk>('/maintenance/photo_recount', {
+      method: 'POST',
+      body: JSON.stringify({ offset, limit }),
+    });
+  }
+  const invoke = await getTauriInvoke();
+  return invoke('run_photo_recount', { offset, limit }) as Promise<PhotoRecountChunk>;
+}
+
+export async function dismissPhotoRecount(): Promise<boolean> {
+  if (isWeb) return fetchJson<boolean>('/maintenance/photo_recount/dismiss', { method: 'POST' });
+  const invoke = await getTauriInvoke();
+  return invoke('dismiss_photo_recount') as Promise<boolean>;
+}
+
 // ── Password management ──
 
 export async function setProfilePassword(

@@ -809,5 +809,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "Verwende das Format JJJJ-MM-TT",
     "dateInFuture": "Das Datum darf nicht in der Zukunft liegen"
+  },
+  "photoRecount": {
+    "title": "Fotozählung wurde korrigiert",
+    "whatChanged": "Frühere Versionen haben schnell hintereinander aufgenommene Fotos (z. B. bei Kartierungsflügen) zu niedrig gezählt und bei manchen Fluggeräten wie der Matrice 4E 0 Fotos angezeigt. Neue Importe werden jetzt korrekt gezählt.",
+    "offer": "Open DroneLog kann die DJI-Flüge in diesem Profil ({{count}}) anhand der Fotoanzahl neu zählen, die DJI in jedem Original-Log speichert. Werte werden nur erhöht, nie verringert.",
+    "originalsNote": "Dafür werden die Original-Logdateien benötigt. Es funktioniert also nur für Flüge, deren Dateien aufbewahrt wurden („Hochgeladene Dateien behalten“ bzw. KEEP_UPLOADED_FILES in Docker). Andere Flüge behalten ihren aktuellen Wert.",
+    "recountNow": "Jetzt neu zählen",
+    "later": "Später erinnern",
+    "dontAsk": "Nicht mehr fragen",
+    "running": "Fotos werden neu gezählt… {{done}} von {{total}} Flügen geprüft",
+    "finished": "Fertig. Flüge mit korrigierter Fotoanzahl: {{count}}.",
+    "missing": "Flüge ohne aufbewahrtes Original-Log (unverändert): {{count}}.",
+    "failed": "Neuzählung fehlgeschlagen: {{error}}",
+    "close": "Schließen"
   }
 }

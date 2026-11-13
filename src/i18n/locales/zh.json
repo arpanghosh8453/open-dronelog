@@ -809,5 +809,19 @@
     "dateJumpPlaceholder": "YYYY-MM-DD",
     "useDateFormat": "请使用 YYYY-MM-DD 格式",
     "dateInFuture": "日期不能是未来时间"
+  },
+  "photoRecount": {
+    "title": "照片计数已修复",
+    "whatChanged": "早期版本会少算快速连拍的照片（例如测绘任务），并且对部分机型（如 Matrice 4E）显示 0 张照片。新导入的飞行现在会正确计数。",
+    "offer": "Open DroneLog 可以使用 DJI 在每个原始日志中保存的照片数量，重新统计此配置文件中已有的 DJI 飞行（{{count}} 次）。数量只会增加，不会减少。",
+    "originalsNote": "这需要原始日志文件，因此只适用于保留了文件的飞行（“保留上传的文件”或 Docker 中的 KEEP_UPLOADED_FILES）。其他飞行保持当前数量。",
+    "recountNow": "立即重新统计",
+    "later": "稍后提醒",
+    "dontAsk": "不再询问",
+    "running": "正在重新统计照片… 已检查 {{done}} / {{total}} 次飞行",
+    "finished": "完成。照片数量已更正的飞行：{{count}} 次。",
+    "missing": "没有保留原始日志的飞行（未更改）：{{count}} 次。",
+    "failed": "重新统计失败：{{error}}",
+    "close": "关闭"
   }
 }

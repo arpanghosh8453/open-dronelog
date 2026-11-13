@@ -21,6 +21,7 @@ use tokio::time::timeout;
 use dji_log_parser::frame::{records_to_frames, Frame};
 use dji_log_parser::layout::auxiliary::Department;
 use dji_log_parser::layout::details::ProductType;
+use dji_log_parser::record::camera::CameraWorkMode;
 use dji_log_parser::record::component_serial::ComponentType;
 use dji_log_parser::record::smart_battery_group::SmartBatteryGroup;
 use dji_log_parser::record::Record;
@@ -377,7 +378,7 @@ impl<'a> LogParser<'a> {
         );
 
         // Check if we need an encryption key for V13+ logs
-        let (frames, used_djifly_fallback, component_serials) = self.get_frames(&parser, file_hash).await?;
+        let (frames, used_djifly_fallback, component_serials, extra_bracketed_photos) = self.get_frames(&parser, file_hash).await?;
         log::info!("Extracted {} frames from log", frames.len());
 
         // Log when ComponentSerial provides a longer serial than the header
@@ -442,7 +443,17 @@ impl<'a> LogParser<'a> {
             .to_string();
 
         // Count photo and video capture events from telemetry transitions
-        let (photo_count, video_count) = crate::models::count_media_events(&points);
+        let (edge_photo_count, video_count) = crate::models::count_media_events(&points);
+        // DJI Pilot 2 writes its own photo count into the log header; when it is there it is
+        // the closest figure (it matched the SD card on M30T and Matrice 4E mapping flights), so
+        // use it. DJI Fly leaves it at 0: then count shots from the camera records, adding the
+        // extra frames of bracketed (AEB) or burst shots.
+        let header_photo_count = parser.details.capture_num.max(0);
+        let photo_count = if header_photo_count > 0 {
+            header_photo_count
+        } else {
+            edge_photo_count + extra_bracketed_photos
+        };
 
         let metadata = FlightMetadata {
             id: self.db.generate_flight_id(),
@@ -879,7 +890,7 @@ impl<'a> LogParser<'a> {
     /// to prevent panics from crashing the application.
     /// Returns (frames, used_djifly_fallback) where used_djifly_fallback indicates
     /// if the DJIFly department override was needed (third-party app like Dronelink).
-    async fn get_frames(&self, parser: &DJILog, file_hash: &str) -> Result<(Vec<Frame>, bool, ComponentSerials), ParserError> {
+    async fn get_frames(&self, parser: &DJILog, file_hash: &str) -> Result<(Vec<Frame>, bool, ComponentSerials, i32), ParserError> {
         // Version 13+ requires keychains for decryption
         let (keychains, used_djifly_fallback) = if parser.version >= 13 {
             // First check database cache
@@ -954,16 +965,27 @@ impl<'a> LogParser<'a> {
                     let mut current_is_photo = false;
                     let mut current_is_video = false;
                     let mut osd_count = 0;
+                    let mut fly_time: f32 = 0.0;
+                    let mut current_is_shot = false;
+                    let mut shots = ShotTracker::default();
 
                     for record in &records {
                         match record {
                             dji_log_parser::record::Record::Camera(camera) => {
+                                current_is_shot = shots.observe(
+                                    fly_time,
+                                    matches!(camera.work_mode, CameraWorkMode::Capture),
+                                    camera.is_capture_disable,
+                                    camera.is_ddr_storing,
+                                    camera.remain_photo_num,
+                                );
                                 current_is_photo = camera.is_shooting_single_photo;
                                 current_is_video = camera.is_recording;
                             }
-                            dji_log_parser::record::Record::OSD(_) => {
+                            dji_log_parser::record::Record::OSD(osd) => {
+                                fly_time = osd.fly_time;
                                 if osd_count > 0 {
-                                    persistent_camera_states.push((current_is_photo, current_is_video));
+                                    persistent_camera_states.push((current_is_photo, current_is_shot, current_is_video));
                                 }
                                 osd_count += 1;
                             }
@@ -972,14 +994,20 @@ impl<'a> LogParser<'a> {
                     }
 
                     let mut frames = records_to_frames(records, parser_ref.details.clone());
-                    
+
+                    // Use one photo signal per log: the camera's busy flags when it reports them
+                    // (one pulse per shot, bracketed ones included), otherwise the single-photo
+                    // flag. Combining them counts most shots twice, because the busy pulse comes
+                    // a few seconds after the single-photo flag while the file is written.
+                    let use_busy_flags = shots.saw_shot;
                     // Override the artificially false values injected by the library with our persistent trackers
-                    for (frame, &(is_photo, is_video)) in frames.iter_mut().zip(persistent_camera_states.iter()) {
-                        frame.camera.is_photo = is_photo;
+                    for (frame, &(is_photo, is_shot, is_video)) in frames.iter_mut().zip(persistent_camera_states.iter()) {
+                        frame.camera.is_photo = if use_busy_flags { is_shot } else { is_photo };
                         frame.camera.is_video = is_video;
                     }
+                    let extra_bracketed = if use_busy_flags { shots.extra_bracketed } else { 0 };
 
-                    Ok((frames, comp_serials))
+                    Ok((frames, comp_serials, extra_bracketed))
                 }))
             }),
         )
@@ -998,7 +1026,7 @@ impl<'a> LogParser<'a> {
             }
             Ok(Ok(Ok(frames_result))) => {
                 frames_result
-                    .map(|(frames, comp_serials)| (frames, used_djifly_fallback, comp_serials))
+                    .map(|(frames, comp_serials, extra)| (frames, used_djifly_fallback, comp_serials, extra))
                     .map_err(|e: dji_log_parser::Error| ParserError::Parse(e.to_string()))
             }
         }
@@ -1979,5 +2007,126 @@ pub fn run_post_import_steps(
         if let Err(e) = db.apply_saved_customizations(flight_id, hash) {
             log::warn!("Failed to restore customizations for flight {}: {}", flight_id, e);
         }
+    }
+}
+
+/// Detects shots from the camera's own busy flags.
+///
+/// `is_shooting_single_photo` is unreliable: it stays on between shots taken a second apart,
+/// and in bracketing (AEB) mode some aircraft never set it at all. While the camera is in
+/// photo mode it reports "capture disabled" for a shot, and the remaining-photo estimate drops
+/// by the number of frames that shot stored (5 for AEB x5). It then reports "storing" while the
+/// file is written, which can show up as a separate pulse a few seconds later; a storing pulse
+/// only counts as a shot of its own when no shot started shortly before it.
+#[derive(Default)]
+struct ShotTracker {
+    in_busy: bool,
+    counted: bool,
+    last_shot_at: Option<f32>,
+    remain_before: Option<u32>,
+    remain_last: Option<u32>,
+    drop_counted: bool,
+    /// Whether any shot was seen through the busy flags in this log.
+    saw_shot: bool,
+    /// Frames stored beyond the first, summed over bracketed or burst shots.
+    extra_bracketed: i32,
+}
+
+impl ShotTracker {
+    /// Largest number of frames one bracketed/burst shot is assumed to store; bigger drops
+    /// are the estimate being recalculated (e.g. after a format change), not photos.
+    const MAX_FRAMES_PER_SHOT: u32 = 10;
+    /// A storing pulse this many seconds after a shot started is that shot's file being
+    /// written, not a new shot (seen 4-5 s after each 100 MP DNG on a Mavic 4 Pro).
+    const STORING_ECHO_SECS: f32 = 6.5;
+
+    /// Feeds one Camera record seen at flight time `now` (seconds); returns true while a
+    /// counted shot is in progress.
+    fn observe(&mut self, now: f32, photo_mode: bool, capture_disabled: bool, storing: bool, remain_photo_num: u32) -> bool {
+        let busy = photo_mode && (capture_disabled || storing);
+        if busy && !self.in_busy {
+            self.counted = false;
+            self.remain_before = self.remain_last;
+        }
+        if busy && !self.counted {
+            let echo = self
+                .last_shot_at
+                .map_or(false, |t| now - t <= Self::STORING_ECHO_SECS);
+            if capture_disabled || !echo {
+                self.counted = true;
+                self.drop_counted = false;
+                self.saw_shot = true;
+                self.last_shot_at = Some(now);
+            }
+        }
+        if busy && self.counted && !self.drop_counted {
+            if let Some(before) = self.remain_before {
+                if remain_photo_num != before {
+                    let frames = before.saturating_sub(remain_photo_num);
+                    if (2..=Self::MAX_FRAMES_PER_SHOT).contains(&frames) {
+                        self.extra_bracketed += (frames - 1) as i32;
+                    }
+                    self.drop_counted = true;
+                }
+            }
+        }
+        self.in_busy = busy;
+        self.remain_last = Some(remain_photo_num);
+        busy && self.counted
+    }
+}
+
+#[cfg(test)]
+mod shot_tracker_tests {
+    use super::ShotTracker;
+
+    /// Feeds (seconds x10, photo_mode, capture_disabled, storing, remain); returns (shots, extra frames).
+    fn run(seq: &[(u32, bool, bool, bool, u32)]) -> (i32, i32) {
+        let mut t = ShotTracker::default();
+        let (mut shots, mut was) = (0, false);
+        for &(tick, mode, cd, st, remain) in seq {
+            let now = t.observe(tick as f32 / 10.0, mode, cd, st, remain);
+            if now && !was {
+                shots += 1;
+            }
+            was = now;
+        }
+        (shots, t.extra_bracketed)
+    }
+
+    #[test]
+    fn aeb_shot_counts_its_five_frames() {
+        // Mavic 4 Pro, AEB x5 (ODL issue #225): remaining photos drops 3903 -> 3898.
+        let seq = [
+            (0, true, false, false, 3903), (10, true, true, false, 3903), (20, true, true, false, 3898),
+            (30, true, true, true, 3898), (40, true, false, false, 3898),
+        ];
+        assert_eq!(run(&seq), (1, 4));
+    }
+
+    #[test]
+    fn storing_pulse_right_after_a_shot_is_the_same_shot() {
+        let seq = [
+            (0, true, false, false, 900), (10, true, true, false, 899), (20, true, false, false, 899),
+            (50, true, false, true, 899), (60, true, false, false, 899), // file being written
+            (500, true, false, true, 898), (510, true, false, false, 898), // a later shot seen only as storing
+            (540, true, true, false, 897), (550, true, false, false, 897), // 4 s later: a real new shot
+        ];
+        assert_eq!(run(&seq), (3, 0));
+    }
+
+    #[test]
+    fn estimate_jumps_are_not_photos() {
+        let seq = [
+            (0, true, false, false, 4000), (10, true, true, false, 4000),
+            (20, true, true, false, 3700), (30, true, false, false, 3700),
+        ];
+        assert_eq!(run(&seq), (1, 0));
+    }
+
+    #[test]
+    fn storing_at_the_end_of_a_video_is_not_a_photo() {
+        let seq = [(0, false, false, false, 0), (10, false, false, true, 0), (20, false, false, false, 0)];
+        assert_eq!(run(&seq), (0, 0));
     }
 }
