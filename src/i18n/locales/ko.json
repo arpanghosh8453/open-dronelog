@@ -769,6 +769,8 @@
     "create": "생성",
     "cancel": "취소",
     "delete": "프로필 삭제",
+    "rename": "프로필 이름 변경",
+    "renameTitle": "프로필 \"{{name}}\"의 새 이름:",
     "confirmDelete": "프로필 \"{{name}}\"을(를) 삭제하시겠습니까? 이 프로필의 모든 비행이 영구적으로 삭제됩니다.",
     "namePlaceholder": "프로필 이름",
     "errorEmpty": "프로필 이름을 입력하세요",

@@ -765,6 +765,8 @@
     "create": "Utwórz",
     "cancel": "Anuluj",
     "delete": "Usuń profil",
+    "rename": "Zmień nazwę profilu",
+    "renameTitle": "Zmień nazwę profilu „{{name}}” na:",
     "confirmDelete": "Usunąć profil \"{{name}}\"? Wszystkie loty w tym profilu zostaną trwale usunięte.",
     "namePlaceholder": "Nazwa profilu",
     "errorEmpty": "Nazwa profilu nie może być pusta",

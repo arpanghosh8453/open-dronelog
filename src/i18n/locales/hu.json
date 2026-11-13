@@ -772,6 +772,8 @@
     "create": "Létrehozás",
     "cancel": "Mégse",
     "delete": "Profil törlése",
+    "rename": "Profil átnevezése",
+    "renameTitle": "A(z) „{{name}}” profil új neve:",
     "confirmDelete": "Törli a \"{{name}}\" profilt? Az ebben a profilban szereplő összes repülés véglegesen eltávolításra kerül.",
     "namePlaceholder": "Profil neve",
     "errorEmpty": "A profilnév nem lehet üres",

@@ -3295,11 +3295,169 @@ pub fn delete_profile(data_dir: &std::path::Path, profile: &str) -> Result<(), S
     Ok(())
 }
 
+/// Rename a profile by moving every file and folder that carries its name: the database
+/// (and WAL), the config file, the default uploaded-files folder and, when `SYNC_LOGS_PATH`
+/// is set, its sync subfolder. Also updates `active_profile.txt` if it named the old profile.
+///
+/// The profile's password moves with it. The caller must close any open connection to the
+/// profile's database first. "default" can't be renamed or used, because its files carry no name.
+/// Return `name` if it is exactly the name of an existing profile (other than
+/// "default"). Rename and similar operations must go through this: names
+/// become file paths, so "a/../b" or a different letter case on a
+/// case-insensitive disk could reach another profile's files while password
+/// checks, which use the exact name, look at a different entry.
+pub fn existing_profile_name(data_dir: &std::path::Path, name: &str) -> Result<String, String> {
+    validate_profile_name(name)?;
+    if list_profiles(data_dir).iter().any(|p| p == name) {
+        Ok(name.to_string())
+    } else {
+        Err(format!("Profile '{}' does not exist", name))
+    }
+}
+
+/// Rename a profile and everything that belongs to it, all or nothing.
+///
+/// The password entry, database, WAL, config, upload folder and sync folder
+/// either all move to the new name or, if any move fails, everything already
+/// moved is put back and an error is returned.
+pub fn rename_profile(data_dir: &std::path::Path, old: &str, new: &str) -> Result<(), String> {
+    if old == "default" {
+        return Err("Cannot rename the default profile".to_string());
+    }
+    let old = existing_profile_name(data_dir, old)?;
+    let old = old.as_str();
+    validate_profile_name(new)?;
+    if old == new {
+        return Ok(());
+    }
+    // A case-only change ("work" -> "Work") is allowed; anything else must be a free name.
+    let case_only = old.eq_ignore_ascii_case(new);
+    if !case_only && profile_exists(data_dir, new) {
+        return Err(format!("Profile '{}' already exists", new));
+    }
+
+    let mut items: Vec<(std::path::PathBuf, std::path::PathBuf)> = vec![
+        (
+            data_dir.join(format!("flights_{}.db", old)),
+            data_dir.join(format!("flights_{}.db", new)),
+        ),
+        (
+            data_dir.join(format!("flights_{}.db.wal", old)),
+            data_dir.join(format!("flights_{}.db.wal", new)),
+        ),
+        (config_path_for_profile(data_dir, old), config_path_for_profile(data_dir, new)),
+        (default_upload_folder(data_dir, old), default_upload_folder(data_dir, new)),
+    ];
+    if let (Some(from), Some(to)) = (sync_path_for_profile(old), sync_path_for_profile(new)) {
+        items.push((from, to));
+    }
+    items.retain(|(from, _)| from.exists());
+
+    // Check every destination before touching anything. On a case-insensitive
+    // disk a case-only rename's destination is the source itself, so skip it.
+    if !case_only {
+        if let Some((_, to)) = items.iter().find(|(_, to)| to.exists()) {
+            return Err(format!(
+                "Can't rename: {:?} already exists. Nothing was changed.",
+                to
+            ));
+        }
+    }
+
+    // Move the password first: a database that moved without it would be left unprotected.
+    crate::profile_auth::rename_auth_entry(data_dir, old, new)?;
+
+    let mut moved: Vec<&(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    for item in &items {
+        let (from, to) = item;
+        if let Err(e) = fs::rename(from, to) {
+            // Put back everything already moved, newest first, then the password.
+            for (back_from, back_to) in moved.iter().rev() {
+                if let Err(undo) = fs::rename(back_to, back_from) {
+                    log::error!(
+                        "Rename of profile '{}' failed and {:?} could not be moved back to {:?}: {}",
+                        old, back_to, back_from, undo
+                    );
+                }
+            }
+            if let Err(undo) = crate::profile_auth::rename_auth_entry(data_dir, new, old) {
+                log::error!("Rename of profile '{}' failed and its password entry could not be restored: {}", old, undo);
+            }
+            return Err(format!("Failed to move {:?} to {:?}: {}. Nothing was changed.", from, to, e));
+        }
+        moved.push(item);
+    }
+
+    if get_active_profile(data_dir) == old {
+        set_active_profile(data_dir, new).map_err(|e| format!("Failed to update active profile: {}", e))?;
+    }
+
+    log::info!("Renamed profile '{}' to '{}'", old, new);
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    fn make_profile(dir: &std::path::Path, name: &str) {
+        std::fs::write(dir.join(format!("flights_{}.db", name)), b"db").unwrap();
+    }
+
+    #[test]
+    fn rename_rejects_names_that_are_not_an_existing_profile() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        make_profile(dir, "victim");
+        std::fs::create_dir_all(dir.join("flights_x")).unwrap();
+        crate::profile_auth::set_password(dir, "victim", "secret-pass", None).unwrap();
+
+        // Path tricks and case aliases never reach the victim's files.
+        for name in ["x/../flights_victim", r"..\flights_victim", "VICTIM", "Victim"] {
+            assert!(rename_profile(dir, name, "taken").is_err(), "{} was accepted", name);
+        }
+        assert!(dir.join("flights_victim.db").exists());
+        assert!(!dir.join("flights_taken.db").exists());
+        assert!(crate::profile_auth::profile_is_protected(dir, "victim"));
+    }
+
+    #[test]
+    fn rename_moves_everything_and_the_password() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        make_profile(dir, "old");
+        std::fs::write(config_path_for_profile(dir, "old"), b"{}").unwrap();
+        std::fs::create_dir_all(default_upload_folder(dir, "old")).unwrap();
+        crate::profile_auth::set_password(dir, "old", "secret-pass", None).unwrap();
+
+        rename_profile(dir, "old", "new").unwrap();
+
+        assert!(dir.join("flights_new.db").exists() && !dir.join("flights_old.db").exists());
+        assert!(config_path_for_profile(dir, "new").exists());
+        assert!(default_upload_folder(dir, "new").exists());
+        assert!(crate::profile_auth::profile_is_protected(dir, "new"));
+        assert!(!crate::profile_auth::profile_is_protected(dir, "old"));
+    }
+
+    #[test]
+    fn rename_changes_nothing_when_a_destination_is_taken() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        make_profile(dir, "old");
+        std::fs::write(config_path_for_profile(dir, "old"), b"{}").unwrap();
+        // Leftover config under the new name, with no database: not a profile, but in the way.
+        std::fs::write(config_path_for_profile(dir, "new"), b"{\"leftover\":true}").unwrap();
+        crate::profile_auth::set_password(dir, "old", "secret-pass", None).unwrap();
+
+        assert!(rename_profile(dir, "old", "new").is_err());
+
+        assert!(dir.join("flights_old.db").exists() && !dir.join("flights_new.db").exists());
+        assert!(config_path_for_profile(dir, "old").exists());
+        assert!(crate::profile_auth::profile_is_protected(dir, "old"));
+        assert!(!crate::profile_auth::profile_is_protected(dir, "new"));
+    }
 
     #[test]
     fn lock_errors_are_not_treated_as_corruption() {

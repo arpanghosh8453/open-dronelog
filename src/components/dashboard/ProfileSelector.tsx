@@ -20,6 +20,7 @@ export function ProfileSelector() {
     loadProfiles,
     switchProfile,
     deleteProfile,
+    renameProfile,
     logout,
   } = useFlightStore();
 
@@ -33,6 +34,12 @@ export function ProfileSelector() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteMasterPass, setDeleteMasterPass] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Rename form
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renamePassword, setRenamePassword] = useState('');
+  const [renameMasterPass, setRenameMasterPass] = useState('');
 
   // Password prompt for switching to a protected profile
   const [passwordPrompt, setPasswordPrompt] = useState<string | null>(null);
@@ -102,6 +109,10 @@ export function ProfileSelector() {
     setDeleteMasterPass('');
     setPasswordPrompt(null);
     setSwitchPassword('');
+    setRenaming(null);
+    setRenameValue('');
+    setRenamePassword('');
+    setRenameMasterPass('');
   };
 
   /** Tiny inline spinner */
@@ -112,14 +123,68 @@ export function ProfileSelector() {
     </svg>
   );
 
-  const validateName = (name: string): string | null => {
+  /** `renamingFrom` lets a rename change only the letter case of its own name. */
+  const validateName = (name: string, renamingFrom?: string): string | null => {
     const trimmed = name.trim();
     if (!trimmed) return t('profile.errorEmpty');
     if (trimmed === 'default') return t('profile.errorReserved');
     if (trimmed.length > 50) return t('profile.errorTooLong');
     if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) return t('profile.errorInvalidChars');
-    if (profiles.some(p => p.toLowerCase() === trimmed.toLowerCase())) return t('profile.errorExists');
+    if (profiles.some(p => p !== renamingFrom && p.toLowerCase() === trimmed.toLowerCase())) return t('profile.errorExists');
     return null;
+  };
+
+  const startRename = (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenaming(name);
+    setRenameValue(name);
+    setRenamePassword('');
+    setRenameMasterPass('');
+    setError(null);
+  };
+
+  const cancelRename = () => {
+    setRenaming(null);
+    setRenameValue('');
+    setRenamePassword('');
+    setRenameMasterPass('');
+    setError(null);
+  };
+
+  const confirmRename = async () => {
+    if (!renaming) return;
+    const name = renaming;
+    const trimmed = renameValue.trim();
+    if (trimmed === name) {
+      cancelRename();
+      return;
+    }
+    const validationError = validateName(trimmed, name);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (profilePasswords[name] && !renamePassword.trim()) {
+      setError(t('profile.passwordRequired'));
+      return;
+    }
+    if (masterRequired && !renameMasterPass.trim()) {
+      setError(t('profile.masterPasswordRequired'));
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await renameProfile(name, trimmed, {
+        password: profilePasswords[name] ? renamePassword : undefined,
+        masterPassword: masterRequired ? renameMasterPass : undefined,
+      });
+      cancelRename();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleCreate = async () => {
@@ -345,8 +410,68 @@ export function ProfileSelector() {
             </div>
           )}
 
+          {/* ── Rename form ── */}
+          {renaming && !confirmingDelete && !passwordPrompt && (
+            <div className="p-3">
+              <p className="text-xs text-gray-200 mb-2 leading-snug">
+                {t('profile.renameTitle', { name: renaming })}
+              </p>
+              <input
+                autoFocus
+                type="text"
+                value={renameValue}
+                onChange={(e) => { setRenameValue(e.target.value); setError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmRename();
+                  if (e.key === 'Escape') cancelRename();
+                }}
+                placeholder={t('profile.namePlaceholder')}
+                className="w-full text-xs px-2 py-1.5 mb-1.5 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-drone-primary"
+                maxLength={50}
+              />
+              {profilePasswords[renaming] && (
+                <PasswordInput
+                  wrapperClassName="mb-1.5"
+                  value={renamePassword}
+                  onChange={(e) => { setRenamePassword(e.target.value); setError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmRename(); }}
+                  placeholder={t('profile.passwordPlaceholder')}
+                  className="w-full text-xs px-2 py-1.5 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-drone-primary"
+                />
+              )}
+              {masterRequired && (
+                <PasswordInput
+                  wrapperClassName="mb-1.5"
+                  value={renameMasterPass}
+                  onChange={(e) => { setRenameMasterPass(e.target.value); setError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmRename(); }}
+                  placeholder={t('profile.masterPasswordPlaceholder')}
+                  className="w-full text-xs px-2 py-1.5 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-drone-primary"
+                />
+              )}
+              {error && <p className="text-[10px] text-red-400 mt-1 mb-1 px-0.5">{error}</p>}
+              <div className="flex gap-1.5">
+                <button
+                  onClick={confirmRename}
+                  disabled={busy}
+                  className="flex-1 text-[10px] py-1.5 rounded bg-drone-primary/20 border border-drone-primary text-white hover:bg-drone-primary/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {busy ? <Spinner /> : null}
+                  {t('profile.rename')}
+                </button>
+                <button
+                  onClick={cancelRename}
+                  disabled={busy}
+                  className="flex-1 text-[10px] py-1.5 rounded border border-gray-600 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {t('profile.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Normal dropdown content ── */}
-          {!confirmingDelete && !passwordPrompt && (
+          {!confirmingDelete && !passwordPrompt && !renaming && (
             <>
           {/* Profile list */}
           <div className="max-h-48 overflow-y-auto">
@@ -373,6 +498,17 @@ export function ProfileSelector() {
                     <svg className="w-3 h-3 text-drone-primary" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
+                  )}
+                  {name !== 'default' && name !== activeProfile && (
+                    <button
+                      onClick={(e) => startRename(name, e)}
+                      className="p-0.5 text-gray-500 hover:text-drone-primary transition-colors"
+                      title={t('profile.rename')}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536A4 4 0 0110.708 17.6L7 18.5l.9-3.708A4 4 0 019 13z" />
+                      </svg>
+                    </button>
                   )}
                   {name !== 'default' && name !== activeProfile && (
                     <button
