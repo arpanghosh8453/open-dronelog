@@ -1026,7 +1026,7 @@ Options to support the project and activate a supporter badge.
 ### Recommendations for internet-facing deployments
 
 1. **Always use a reverse proxy** (Nginx, Caddy, Traefik) with TLS termination in front of the container
-2. **Do not expose port 80** directly to the public internet
+2. **Do not expose port 8080** directly to the public internet
 3. Set `PROFILE_CREATION_PASS` to prevent unauthorized profile creation/deletion
 4. Optionally set `DEFAULT_PROFILE_PASSWORD` to avoid leaving the `default` profile unprotected on first startup
 

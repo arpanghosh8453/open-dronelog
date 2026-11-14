@@ -80,6 +80,12 @@ fn main() {
 
     #[cfg(all(feature = "web", not(feature = "tauri-app")))]
     {
+        // `open-dronelog --healthcheck`: probe the local server and exit 0/1.
+        // Used by the container HEALTHCHECK (no shell/curl in the image).
+        if std::env::args().nth(1).as_deref() == Some("--healthcheck") {
+            std::process::exit(if server::run_healthcheck() { 0 } else { 1 });
+        }
+
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()

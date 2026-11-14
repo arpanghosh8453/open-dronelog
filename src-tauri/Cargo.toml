@@ -31,7 +31,7 @@ tauri-plugin-persisted-scope = { version = "2", optional = true }
 
 # Web server (optional — only for Docker/web builds)
 axum = { version = "0.7", features = ["multipart"], optional = true }
-tower-http = { version = "0.5", features = ["cors", "fs"], optional = true }
+tower-http = { version = "0.5", features = ["cors", "fs", "set-header", "compression-gzip"], optional = true }
 tokio-cron-scheduler = { version = "0.13", optional = true }
 cron = { version = "0.15", optional = true }
 
@@ -102,6 +102,7 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
 
 [profile.release]
 # The dji-log-parser library can panic on truncated/corrupted log files,
