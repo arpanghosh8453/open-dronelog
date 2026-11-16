@@ -16,6 +16,7 @@ mod airdata_parser;
 mod api;
 mod battery_pairs;
 mod database;
+mod dronedeploy_parser;
 mod dronelogbook_parser;
 mod litchi_parser;
 mod models;
