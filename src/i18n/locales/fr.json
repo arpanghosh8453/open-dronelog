@@ -769,6 +769,8 @@
     "create": "Créer",
     "cancel": "Annuler",
     "delete": "Supprimer le profil",
+    "rename": "Renommer le profil",
+    "renameTitle": "Renommer le profil « {{name}} » en :",
     "confirmDelete": "Supprimer le profil \"{{name}}\" ? Tous les vols de ce profil seront définitivement supprimés.",
     "namePlaceholder": "Nom du profil",
     "errorEmpty": "Le nom du profil ne peut pas être vide",

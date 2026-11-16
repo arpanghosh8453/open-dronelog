@@ -769,6 +769,8 @@
     "create": "Crea",
     "cancel": "Annulla",
     "delete": "Elimina profilo",
+    "rename": "Rinomina profilo",
+    "renameTitle": "Rinomina il profilo \"{{name}}\" in:",
     "confirmDelete": "Eliminare il profilo \"{{name}}\"? Tutti i voli di questo profilo verranno eliminati permanentemente.",
     "namePlaceholder": "Nome del profilo",
     "errorEmpty": "Il nome del profilo non può essere vuoto",

@@ -2110,6 +2110,90 @@ async fn delete_profile_endpoint(
     Ok(Json(true))
 }
 
+#[derive(Deserialize)]
+struct RenameProfilePayload {
+    name: String,
+    new_name: String,
+    /// The profile's own password, when it has one.
+    password: Option<String>,
+    /// Admin (master) password; required whenever the server has one configured.
+    master_password: Option<String>,
+}
+
+/// POST /api/profiles/rename — rename a profile, moving its database, settings, kept
+/// uploads and password to the new name. Gated like deletion: the admin password when the
+/// server has one, plus the profile's own password when it is protected.
+async fn rename_profile_endpoint(
+    AxumState(state): AxumState<WebAppState>,
+    Json(payload): Json<RenameProfilePayload>,
+) -> Result<Json<SwitchProfileResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let profile = payload.name.trim().to_string();
+    let new_name = payload.new_name.trim().to_string();
+
+    if profile == "default" {
+        return Err(err_response(StatusCode::BAD_REQUEST, "Cannot rename the default profile"));
+    }
+    // Only the exact name of an existing profile: the password checks below
+    // look up this exact name, so an alias must never reach them.
+    let profile = database::existing_profile_name(&state.data_dir, &profile)
+        .map_err(|e| err_response(StatusCode::BAD_REQUEST, e))?;
+    database::validate_profile_name(&new_name)
+        .map_err(|e| err_response(StatusCode::BAD_REQUEST, e))?;
+
+    // ── Admin (master) password gate ──
+    if let Some(ref hash) = state.master_password_hash {
+        match &payload.master_password {
+            Some(mp) if profile_auth::verify_password(mp, hash) => { /* ok */ }
+            Some(_) => {
+                log::warn!("Failed master password attempt for renaming profile '{}'", profile);
+                return Err(err_response(StatusCode::FORBIDDEN, "Invalid master password"));
+            }
+            None => {
+                return Err(err_response(StatusCode::FORBIDDEN, "Master password is required to rename profiles"));
+            }
+        }
+    }
+
+    // ── Profile password gate (shares the login lockout) ──
+    if state.sessions.is_locked_out(&profile) {
+        return Err(err_response(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many failed attempts — please wait 60 seconds",
+        ));
+    }
+    if profile_auth::profile_is_protected(&state.data_dir, &profile) {
+        match &payload.password {
+            Some(pw) => {
+                if let Err(msg) = profile_auth::verify_profile_password(&state.data_dir, &profile, pw) {
+                    state.sessions.record_failure(&profile);
+                    return Err(err_response(StatusCode::UNAUTHORIZED, msg));
+                }
+            }
+            None => {
+                return Err(err_response(StatusCode::UNAUTHORIZED, "Password is required to rename this profile"));
+            }
+        }
+    }
+
+    if database::get_active_profile(&state.data_dir) == profile {
+        return Err(err_response(StatusCode::BAD_REQUEST, "Cannot rename the currently active profile. Switch to a different profile first."));
+    }
+
+    // Close the cached connection and end its sessions before the files move.
+    state.evict_profile(&profile);
+    state.sessions.revoke_profile(&profile);
+
+    database::rename_profile(&state.data_dir, &profile, &new_name)
+        .map_err(|e| err_response(StatusCode::BAD_REQUEST, e))?;
+
+    let session = if profile_auth::profile_is_protected(&state.data_dir, &new_name) {
+        Some(state.sessions.create_session(&new_name))
+    } else {
+        None
+    };
+    Ok(Json(SwitchProfileResponse { name: new_name, session }))
+}
+
 // ============================================================================
 // PASSWORD MANAGEMENT
 // ============================================================================
@@ -2485,6 +2569,7 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/profiles/active", get(get_active_profile))
         .route("/api/profiles/switch", post(switch_profile))
         .route("/api/profiles/delete", post(delete_profile_endpoint))
+        .route("/api/profiles/rename", post(rename_profile_endpoint))
         .route("/api/profiles/set_password", post(set_profile_password))
         .route("/api/profiles/remove_password", post(remove_profile_password))
         .route("/api/profiles/has_master_password", get(has_master_password))

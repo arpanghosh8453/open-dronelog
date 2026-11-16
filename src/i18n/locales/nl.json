@@ -769,6 +769,8 @@
     "create": "Aanmaken",
     "cancel": "Annuleren",
     "delete": "Profiel verwijderen",
+    "rename": "Profiel hernoemen",
+    "renameTitle": "Profiel \"{{name}}\" hernoemen naar:",
     "confirmDelete": "Profiel \"{{name}}\" verwijderen? Alle vluchten in dit profiel worden permanent verwijderd.",
     "namePlaceholder": "Profielnaam",
     "errorEmpty": "Profielnaam mag niet leeg zijn",

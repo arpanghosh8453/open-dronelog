@@ -769,6 +769,8 @@
     "create": "创建",
     "cancel": "取消",
     "delete": "删除配置文件",
+    "rename": "重命名配置文件",
+    "renameTitle": "将配置文件“{{name}}”重命名为：",
     "confirmDelete": "删除配置文件\"{{name}}\"？此配置文件中的所有飞行将被永久删除。",
     "namePlaceholder": "配置文件名称",
     "errorEmpty": "配置文件名称不能为空",

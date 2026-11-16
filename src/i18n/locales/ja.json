@@ -769,6 +769,8 @@
     "create": "作成",
     "cancel": "キャンセル",
     "delete": "プロファイルを削除",
+    "rename": "プロフィール名を変更",
+    "renameTitle": "プロフィール「{{name}}」の新しい名前:",
     "confirmDelete": "プロファイル「{{name}}」を削除しますか？このプロファイルのすべてのフライトが完全に削除されます。",
     "namePlaceholder": "プロファイル名",
     "errorEmpty": "プロファイル名を入力してください",
