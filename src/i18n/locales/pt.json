@@ -332,7 +332,7 @@
     "syncComplete": "Sincronização concluída: {{parts}}",
     "noNewFiles": "Nenhum arquivo novo para importar",
     "noFilesToSync": "Nenhum arquivo para sincronizar",
-    "noFlightLogs": "Nenhum arquivo de registro de voo (.txt, .csv) encontrado na pasta de sincronização.",
+    "noFlightLogs": "Nenhum arquivo de registro de voo (.txt, .csv, .log, .tsv) encontrado na pasta de sincronização.",
     "noSyncFolder": "Nenhuma pasta de sincronização configurada",
     "clickFolderIcon": "Clique no ícone de pasta no cabeçalho para selecionar sua pasta de sincronização, ou importe arquivos manualmente.",
     "syncNotConfigured": "Sincronização não configurada no servidor",

@@ -29,6 +29,7 @@ use dji_log_parser::DJILog;
 use crate::api::DjiApi;
 use crate::database::Database;
 use crate::airdata_parser::AirdataParser;
+use crate::dronedeploy_parser::DroneDeployParser;
 use crate::dronelogbook_parser::DroneLogbookParser;
 use crate::litchi_parser::LitchiParser;
 use crate::models::{FlightMessage, FlightMetadata, FlightStats, TelemetryPoint};
@@ -136,7 +137,7 @@ pub enum ParserError {
     #[error("Parsing timed out after {0} seconds — file may be corrupt or unsupported")]
     Timeout(u64),
 
-    #[error("Incompatible file format — only DJI flight logs (.txt), Litchi CSV exports, Airdata CSV exports, and Open DroneLog CSV exports are supported")]
+    #[error("Incompatible file format — only DJI flight logs (.txt), DroneDeploy Flight Recorder logs (.log/.tsv), Litchi CSV exports, Airdata CSV exports, and Open DroneLog CSV exports are supported")]
     IncompatibleFile,
 }
 
@@ -187,7 +188,7 @@ impl<'a> LogParser<'a> {
         Ok(format!("{:x}", hasher.finalize()))
     }
 
-    /// Parse a flight log file (DJI .txt or Litchi .csv) and extract all telemetry data
+    /// Parse a supported flight log and extract all telemetry data.
     pub async fn parse_log(&self, file_path: &Path) -> Result<ParseResult, ParserError> {
         let parse_start = std::time::Instant::now();
         let file_size = fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
@@ -213,8 +214,15 @@ impl<'a> LogParser<'a> {
         // Detect file format and route to appropriate parser
         let builtin_err;
 
-        // Try built-in CSV parsers first
-        if DroneLogbookParser::is_dronelogbook_csv(file_path) {
+        // DroneDeploy uses a metadata preamble followed by TSV telemetry.
+        if DroneDeployParser::is_dronedeploy_log(file_path) {
+            log::info!("Detected DroneDeploy Flight Recorder format, using DroneDeployParser");
+            match DroneDeployParser::new(self.db).parse(file_path, &file_hash) {
+                Ok(res) => return Ok(res),
+                Err(e) => builtin_err = e,
+            }
+        // Try built-in CSV parsers.
+        } else if DroneLogbookParser::is_dronelogbook_csv(file_path) {
             log::info!("Detected Open DroneLog CSV format, using DroneLogbookParser");
             match DroneLogbookParser::new(self.db).parse(file_path, &file_hash) {
                 Ok(res) => return Ok(res),

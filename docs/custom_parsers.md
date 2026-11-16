@@ -21,7 +21,7 @@ The same custom parser engine is used by:
 ### Extension matching notes
 - Mapping keys are case-insensitive and normalized.
 - Both `"ulg"` and `".ulg"` are accepted as mapping keys.
-- Built-in defaults are: `txt`, `csv`.
+- Built-in defaults are: `txt`, `csv`, `log`, and `tsv`; the latter two are parsed natively only when their contents match a DroneDeploy Flight Recorder export.
 - Mapped custom extensions are added dynamically to the allowed list used by browse, drag/drop, and sync scanning.
 
 ---

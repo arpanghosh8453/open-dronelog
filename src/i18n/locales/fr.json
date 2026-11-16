@@ -339,7 +339,7 @@
     "syncComplete": "Synchronisation terminée : {{parts}}",
     "noNewFiles": "Aucun nouveau fichier à importer",
     "noFilesToSync": "Aucun fichier à synchroniser",
-    "noFlightLogs": "Aucun fichier de journal de vol (.txt, .csv) trouvé dans le dossier de synchronisation.",
+    "noFlightLogs": "Aucun fichier de journal de vol (.txt, .csv, .log, .tsv) trouvé dans le dossier de synchronisation.",
     "noSyncFolder": "Aucun dossier de synchronisation configuré",
     "clickFolderIcon": "Cliquez sur l'icône de dossier dans l'en-tête ci-dessus pour sélectionner votre dossier de synchronisation, ou importez des fichiers manuellement.",
     "syncNotConfigured": "Synchronisation non configurée sur le serveur",

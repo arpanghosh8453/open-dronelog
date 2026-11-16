@@ -339,7 +339,7 @@
     "syncComplete": "同步完成：{{parts}}",
     "noNewFiles": "没有新文件可导入",
     "noFilesToSync": "没有文件可同步",
-    "noFlightLogs": "同步文件夹中未找到飞行日志文件 (.txt, .csv)。",
+    "noFlightLogs": "同步文件夹中未找到飞行日志文件 (.txt, .csv, .log, .tsv)。",
     "noSyncFolder": "未配置同步文件夹",
     "clickFolderIcon": "点击头部的文件夹图标选择同步文件夹，或手动导入文件。",
     "syncNotConfigured": "服务器未配置同步",

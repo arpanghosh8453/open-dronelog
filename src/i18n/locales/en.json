@@ -341,7 +341,7 @@
     "syncComplete": "Sync complete: {{parts}}",
     "noNewFiles": "No new files to import",
     "noFilesToSync": "No files to sync",
-    "noFlightLogs": "No flight log files (.txt, .csv) found in sync folder.",
+    "noFlightLogs": "No flight log files (.txt, .csv, .log, .tsv) found in sync folder.",
     "noSyncFolder": "No sync folder configured",
     "clickFolderIcon": "Click the folder icon in the header above to select your sync folder, or import files manually.",
     "syncNotConfigured": "Sync not configured on server",

@@ -339,7 +339,7 @@
     "syncComplete": "Synchronisierung abgeschlossen: {{parts}}",
     "noNewFiles": "Keine neuen Dateien zum Importieren",
     "noFilesToSync": "Keine Dateien zum Synchronisieren",
-    "noFlightLogs": "Keine Flugprotokolldateien (.txt, .csv) im Sync-Ordner gefunden.",
+    "noFlightLogs": "Keine Flugprotokolldateien (.txt, .csv, .log, .tsv) im Sync-Ordner gefunden.",
     "noSyncFolder": "Kein Sync-Ordner konfiguriert",
     "clickFolderIcon": "Klicken Sie auf das Ordnersymbol oben, um Ihren Sync-Ordner auszuwählen, oder importieren Sie Dateien manuell.",
     "syncNotConfigured": "Synchronisierung nicht auf dem Server konfiguriert",

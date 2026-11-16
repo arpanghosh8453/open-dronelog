@@ -16,7 +16,7 @@ const isWeb = import.meta.env.VITE_BACKEND === 'web';
 
 // Base URL for web mode API calls (relative in production, configurable in dev)
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
-const DEFAULT_ALLOWED_LOG_EXTENSIONS = ['txt', 'csv'];
+const DEFAULT_ALLOWED_LOG_EXTENSIONS = ['txt', 'csv', 'log', 'tsv'];
 
 // ============================================================================
 // Tauri invoke wrapper (lazy-loaded to avoid import errors in web mode)

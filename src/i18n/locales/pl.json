@@ -337,7 +337,7 @@
     "syncComplete": "Synchronizacja zakończona: {{parts}}",
     "noNewFiles": "Brak nowych plików do importu",
     "noFilesToSync": "Brak plików do synchronizacji",
-    "noFlightLogs": "Nie znaleziono plików dzienników lotów (.txt, .csv) w folderze synchronizacji.",
+    "noFlightLogs": "Nie znaleziono plików dzienników lotów (.txt, .csv, .log, .tsv) w folderze synchronizacji.",
     "noSyncFolder": "Nie skonfigurowano folderu synchronizacji",
     "clickFolderIcon": "Kliknij ikonę folderu w nagłówku, aby wybrać folder synchronizacji, lub importuj pliki ręcznie.",
     "syncNotConfigured": "Synchronizacja nie skonfigurowana na serwerze",

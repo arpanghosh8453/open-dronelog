@@ -339,7 +339,7 @@
     "syncComplete": "同期完了: {{parts}}",
     "noNewFiles": "インポートする新しいファイルがありません",
     "noFilesToSync": "同期するファイルがありません",
-    "noFlightLogs": "同期フォルダにフライトログファイル (.txt, .csv) が見つかりません。",
+    "noFlightLogs": "同期フォルダにフライトログファイル (.txt, .csv, .log, .tsv) が見つかりません。",
     "noSyncFolder": "同期フォルダが設定されていません",
     "clickFolderIcon": "ヘッダーのフォルダアイコンをクリックして同期フォルダを選択するか、手動でファイルをインポートしてください。",
     "syncNotConfigured": "サーバーで同期が設定されていません",

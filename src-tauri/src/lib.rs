@@ -2,6 +2,7 @@ pub mod airdata_parser;
 pub mod api;
 pub mod battery_pairs;
 pub mod database;
+pub mod dronedeploy_parser;
 pub mod dronelogbook_parser;
 pub mod litchi_parser;
 pub mod models;
@@ -26,6 +27,7 @@ pub fn run() {
 }
 
 pub use database::Database;
+pub use dronedeploy_parser::DroneDeployParser;
 pub use models::*;
 pub use parser::LogParser;
 pub use airdata_parser::AirdataParser;

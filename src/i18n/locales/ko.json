@@ -339,7 +339,7 @@
     "syncComplete": "동기화 완료: {{parts}}",
     "noNewFiles": "가져올 새 파일 없음",
     "noFilesToSync": "동기화할 파일 없음",
-    "noFlightLogs": "동기화 폴더에서 비행 로그 파일 (.txt, .csv)을 찾을 수 없습니다.",
+    "noFlightLogs": "동기화 폴더에서 비행 로그 파일 (.txt, .csv, .log, .tsv)을 찾을 수 없습니다.",
     "noSyncFolder": "동기화 폴더가 구성되지 않았습니다",
     "clickFolderIcon": "헤더의 폴더 아이콘을 클릭하여 동기화 폴더를 선택하거나 수동으로 파일을 가져오세요.",
     "syncNotConfigured": "서버에서 동기화가 구성되지 않았습니다",

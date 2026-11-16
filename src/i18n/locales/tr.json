@@ -341,7 +341,7 @@
     "syncComplete": "Senkronizasyon tamamlandı: {{parts}}",
     "noNewFiles": "İçe aktarılacak yeni dosya yok",
     "noFilesToSync": "Senkronize edilecek dosya yok",
-    "noFlightLogs": "Senkronizasyon klasöründe uçuş günlüğü dosyası (.txt, .csv) bulunamadı.",
+    "noFlightLogs": "Senkronizasyon klasöründe uçuş günlüğü dosyası (.txt, .csv, .log, .tsv) bulunamadı.",
     "noSyncFolder": "Hiçbir senkronizasyon klasörü yapılandırılmadı",
     "clickFolderIcon": "Senkronizasyon klasörünüzü seçmek veya dosyaları manuel olarak içe aktarmak için yukarıdaki başlıktaki klasör simgesini tıklayın.",
     "syncNotConfigured": "Sunucuda senkronizasyon yapılandırılmamış",

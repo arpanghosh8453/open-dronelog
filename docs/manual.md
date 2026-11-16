@@ -32,7 +32,7 @@
 
 ## Overview
 
-Open DroneLog is a high-performance application for analyzing drone flight logs. It supports DJI flight logs (`.txt` format), Litchi CSV exports, and Airdata CSV exports. All your data is stored locally in a DuckDB database with no cloud uploads, no subscriptions, and complete privacy.
+Open DroneLog is a high-performance application for analyzing drone flight logs. It supports DJI flight logs (`.txt`), DroneDeploy Flight Recorder logs (`.log`/`.tsv`), Litchi CSV, Airdata CSV, and Open DroneLog CSV exports. All your data is stored locally in a DuckDB database with no cloud uploads, no subscriptions, and complete privacy.
 
 ### Key Capabilities
 
@@ -62,7 +62,7 @@ When you first open Open DroneLog, you will see an empty dashboard with the impo
 ### Importing Your First Flight
 
 1. Click **Browse Files** or drag-and-drop flight log files onto the import area
-2. Select your DJI `.txt` files, Litchi `.csv` files, or Airdata `.csv` files
+2. Select supported DJI `.txt`, DroneDeploy `.log`/`.tsv`, or CSV flight-log files
 3. Wait for processing (the app will decrypt DJI logs, which requires internet on first import)
 4. Your flights appear in the sidebar list
 
@@ -118,9 +118,13 @@ The application is divided into three main areas:
 | Format | File Extension | Source |
 |--------|----------------|--------|
 | DJI Flight Logs | `.txt` | Modern DJI format from DJI Fly app |
+| DroneDeploy Flight Recorder | `.log`, `.tsv` | Native tab-separated export from DroneDeploy |
 | Litchi CSV | `.csv` | Exported from Litchi app |
 | Airdata CSV | `.csv` | Exported from airdata.com (all unit settings supported) |
+| Open DroneLog CSV | `.csv` | Exported from Open DroneLog |
 | External Parser Plugins | Depends on plugin | User-defined parsers configured via `parsers.json` |
+
+DroneDeploy imports preserve available aircraft, battery, and controller metadata; battery capacity and current; gimbal, GPS, RC, camera, and mission-message telemetry. Unit suffixes are detected for meter/feet distances, mph/km/h/m/s speeds, Celsius/Fahrenheit temperatures, V/mV voltages, and A/mA currents before values are normalized to Open DroneLog's storage units. Files with `.log` or `.tsv` extensions that do not contain a valid DroneDeploy Flight Recorder header are skipped as incompatible.
 
 ### Import Methods
 
@@ -467,6 +471,7 @@ When enabled, the app automatically generates descriptive tags during import:
 | **Continent** | Reverse geocoded from takeoff coordinates |
 | **Litchi** | Flight was imported from Litchi CSV |
 | **Airdata** | Flight was imported from Airdata CSV |
+| **DroneDeploy** | Flight was imported from a DroneDeploy Flight Recorder log |
 | **Manual Entry** | Flight was created via manual entry (no log file) |
 
 ### Manual Tags
@@ -1128,7 +1133,7 @@ When a dropdown is open:
 
 | Check | Solution |
 |-------|----------|
-| **File format** | Ensure the file is a valid DJI `.txt` or Litchi `.csv` |
+| **File format** | Ensure the file is a supported DJI `.txt`, DroneDeploy `.log`/`.tsv`, or recognized `.csv` export |
 | **Internet connection** | Required for DJI log decryption on first import |
 | **Isolate the issue** | Try importing a single file |
 

@@ -1,8 +1,8 @@
 {
   "sourceFingerprints": {
-    "readmeEnvVars": "0af4b86231dd66eadf0a5938a45d5a892377bc2a5f139ed9aee1aa4215371a64",
-    "composeEnvVars": "0af4b86231dd66eadf0a5938a45d5a892377bc2a5f139ed9aee1aa4215371a64",
-    "composeBuildEnvVars": "0af4b86231dd66eadf0a5938a45d5a892377bc2a5f139ed9aee1aa4215371a64"
+    "readmeEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222",
+    "composeEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222",
+    "composeBuildEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222"
   },
   "sources": [
     "README.md",
@@ -14,6 +14,7 @@
     "DEFAULT_PROFILE_PASSWORD",
     "DJI_API_KEY",
     "KEEP_UPLOADED_FILES",
+    "MANAGER_OVERVIEW",
     "PROFILE_CREATION_PASS",
     "RUST_LOG",
     "SESSION_TTL_HOURS",

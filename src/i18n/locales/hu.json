@@ -341,7 +341,7 @@
     "syncComplete": "Szinkronizálás kész: {{parts}}",
     "noNewFiles": "Nincs új fájl az importáláshoz",
     "noFilesToSync": "Nincs fájl a szinkronizáláshoz",
-    "noFlightLogs": "Nem található repülési naplófájl (.txt, .csv) a szinkronizálási mappában.",
+    "noFlightLogs": "Nem található repülési naplófájl (.txt, .csv, .log, .tsv) a szinkronizálási mappában.",
     "noSyncFolder": "Nincs szinkronizálási mappa konfigurálva",
     "clickFolderIcon": "Kattintson a fent található mappa ikonra a szinkronizálási mappa kiválasztásához, vagy importálja manuálisan a fájlokat.",
     "syncNotConfigured": "Szinkronizálás nincs konfigurálva a szerveren",

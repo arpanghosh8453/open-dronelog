@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
-pub const BUILTIN_ALLOWED_EXTENSIONS: [&str; 2] = ["txt", "csv"];
+pub const BUILTIN_ALLOWED_EXTENSIONS: [&str; 4] = ["txt", "csv", "log", "tsv"];
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PluginConfig {

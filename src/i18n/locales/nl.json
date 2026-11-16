@@ -339,7 +339,7 @@
     "syncComplete": "Synchronisatie voltooid: {{parts}}",
     "noNewFiles": "Geen nieuwe bestanden om te importeren",
     "noFilesToSync": "Geen bestanden om te synchroniseren",
-    "noFlightLogs": "Geen vluchtlogbestanden (.txt, .csv) gevonden in synchronisatiemap.",
+    "noFlightLogs": "Geen vluchtlogbestanden (.txt, .csv, .log, .tsv) gevonden in synchronisatiemap.",
     "noSyncFolder": "Geen synchronisatiemap geconfigureerd",
     "clickFolderIcon": "Klik op het mappictogram in de koptekst om je synchronisatiemap te selecteren, of importeer bestanden handmatig.",
     "syncNotConfigured": "Synchronisatie niet geconfigureerd op server",

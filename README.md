@@ -39,6 +39,7 @@
 - [Accessing flight log files](#accessing-flight-log-files)
   - [Automated Sync Bridge](#automated-sync-windowsmac)
   - [Manual Log Collection](#manual-log-collection)
+  - [DroneDeploy Flight Recorder Logs](#dronedeploy-flight-recorder-logs)
   - [Airdata Exports](#airdata-exports)
 - [Setup and installation (Windows/MacOS/Android)](#setup-and-installation-windowsmacos)
   - [Try the Webapp First](#try-the-webapp-first-no-installation-required)
@@ -85,7 +86,7 @@
 ## Features
 
 - **High-Performance Analytics**: DuckDB-powered queries with automatic downsampling for large datasets. Free, open source, no subscription required.
-- **Multi-Format Support**: Import DJI logs (.txt), Litchi CSV, and Airdata CSV exports with automatic unit detection. Third-party apps (Dronelink, DroneDeploy) supported. Optional external parser plugins can be configured via `parsers.json`.
+- **Multi-Format Support**: Import DJI logs (`.txt`), DroneDeploy Flight Recorder logs (`.log`/`.tsv`), Litchi CSV, Airdata CSV, and Open DroneLog CSV exports. Units are normalized automatically, and optional external parser plugins can be configured via `parsers.json`.
 - **Smart Deduplication**: Prevents duplicate imports based on drone serial, battery serial, and start time.
 - **Interactive Flight Maps**: 3D terrain, map-type selection (Satellite, Topographic, OpenStreetMap), flight replay with speed control (0.5x-16x), live telemetry overlay, and RC joystick visualization.
 - **Telemetry Charts**: Height, speed, battery, cell voltages, attitude, RC signal, GPS, distance-to-home, velocity, battery full capacity, and battery remaining capacity with synchronized drag-to-zoom, per-profile telemetry color customization, and collapsible panel controls.
@@ -131,6 +132,10 @@ This project supports modern DJI log files in the `.txt` format. For DJI fly app
 You can find more details resources from this simple [google search](https://www.google.com/search?q=where+can+i+find+the+DJI+log+files&oq=where+can+i+find+the+DJI+log+files)
 
 Litchi flight logs can be exported as CSV files from the Litchi app.  Litchi-imported flights are automatically tagged with "Litchi" for easy filtering.
+
+### DroneDeploy Flight Recorder Logs
+
+DroneDeploy Flight Recorder exports can be imported directly in their native tab-separated `.log` or `.tsv` format. Open DroneLog reads the metadata preamble and telemetry table, detects imperial or metric unit suffixes, normalizes values to metric storage units, and tags imported flights with "DroneDeploy". A `.log` or `.tsv` file whose contents do not match the DroneDeploy Flight Recorder format is skipped as incompatible.
 
 ### Airdata Exports
 
@@ -510,7 +515,8 @@ npm run context:check
 │   │   ├── main.rs          # Entry point (feature-gated: Tauri or Axum)
 │   │   ├── server.rs        # Axum REST API (web feature only)
 │   │   ├── database.rs      # DuckDB connection & schema
-│   │   ├── parser.rs        # dji-log-parser wrapper
+│   │   ├── parser.rs        # Built-in parser dispatch and DJI log parser
+│   │   ├── dronedeploy_parser.rs # DroneDeploy .log/.tsv parser
 │   │   ├── models.rs        # Data structures
 │   │   ├── api.rs           # DJI API key fetching (if present)
 │   │   ├── profile_auth.rs  # Per-profile password hashing (argon2id)
@@ -576,7 +582,7 @@ Looking to extend functionality without waiting for official features? Check out
 
 ### Custom Parsers
 
-Open DroneLog supports optional external parser plugins for bringing in logs from additional formats beyond the built-in DJI/Litchi/Airdata support. You can configure parser definitions, map fields, and control how imported data is normalized.
+Open DroneLog supports optional external parser plugins for bringing in logs from additional formats beyond the built-in DJI, DroneDeploy, Litchi, Airdata, and Open DroneLog CSV support. You can configure parser definitions, map fields, and control how imported data is normalized.
 
 See the guide: [custom parser documentation](/docs/custom_parsers.md).
 

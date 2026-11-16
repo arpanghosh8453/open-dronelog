@@ -38,7 +38,7 @@ import { useIsMobileRuntime } from '@/hooks/platform/useIsMobileRuntime';
 const SYNC_FOLDER_KEY = 'syncFolderPath';
 const AUTOSCAN_KEY = 'autoscanEnabled';
 const MOBILE_SYNC_URI_KEY = 'mobileSyncFolderUri';
-const DEFAULT_ALLOWED_EXTENSIONS = ['txt', 'csv'];
+const DEFAULT_ALLOWED_EXTENSIONS = ['txt', 'csv', 'log', 'tsv'];
 const REFRESH_INTERVAL = 10;
 const STARTUP_SYNC_GUARD_PREFIX = 'startupSyncDone:';
 
