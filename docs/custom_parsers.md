@@ -1,6 +1,6 @@
 # Custom Parsers Guideline
 
-Open-DroneLog supports plugins for parsing custom and proprietary drone log formats. Instead of writing Rust code and recompiling the application, you can write standalone scripts (in Python, Bash, Node.js, etc.) that convert your logs into the standard **Open DroneLog CSV** format. 
+Open-DroneLog supports plugins for parsing custom and proprietary drone log formats. Instead of writing Rust code and recompiling the application, you can write standalone scripts or executables (in Python, Bash, Node.js, etc. on the desktop app; in Docker, Python or self-contained executables, see [Docker deployment](#5-docker-deployment)) that convert your logs into the standard **Open DroneLog CSV** format. 
 
 Open-DroneLog will execute your scripts automatically during the import process when it detects a matching file extension.
 
@@ -123,12 +123,12 @@ Similar to metadata, you can provide warnings or tips (like "Wind Warning") by a
 2. **Output path**: Always write the final CSV exactly to `$OUTPUT` (not to an adjacent file). Open-DroneLog validates that this file exists after your process exits.
 3. **Performance**: Avoid heavy computations. If parsing takes too long, import can fail.
 4. **Environment**: If running Open-DroneLog via Docker, your scripts run inside the container. 
-   - **Python 3 and Node.js are bundled natively** in the Docker image. You can invoke them directly in your `parsers.json` `command` and mount your scripts via volumes.
+   - **Python 3 is bundled** in the Docker image. You can invoke it directly in your `parsers.json` `command` and mount your scripts via volumes. Node.js, Bash and other interpreters are **not** included.
    - For other languages, write a self-contained compiled binary (like Go or Rust) statically linked for Linux, or build a custom image extending the base Dockerfile.
 
 ### Command portability tip
 - On Windows desktop, prefer `python` (or an absolute path to `python.exe`) if `python3` is not available on `PATH`.
-- On Linux/Docker, `python3` is typically available.
+- On Linux/Docker, `python3` is available (it resolves to the parser virtualenv).
 
 ### Example Python Parser (`my_parser.py`)
 
@@ -177,6 +177,13 @@ if __name__ == "__main__":
 
 ## 5. Docker Deployment
 
+> [!IMPORTANT]
+> The Docker image is a minimal distroless image: it has **no shell, Bash, Node.js, package manager or common CLI tools**, and the container runs as a non-root user (UID `65532`) with a read-only root filesystem. In Docker, custom parsers can therefore be:
+> - **Python 3.13 scripts** using the standard library plus the packages from `requirements.txt` (see below), or
+> - **self-contained executables** (statically linked, or linked only against glibc/libstdc++), e.g. compiled Go/Rust/C++ binaries.
+>
+> Shell scripts (`bash`, `sh`) and Node.js parsers are **not supported** in the Docker image. Parser scripts must not write next to themselves: `/app/plugins` should be mounted read-only, and temporary files belong in `/tmp`.
+
 When deploying Open-DroneLog in Docker, map a plugins folder in your `docker-compose.yml`:
 
 ```yaml
@@ -184,11 +191,11 @@ services:
   open-dronelog:
     image: arpanghosh8453/open-dronelog:latest
     volumes:
-      - ./data:/data/drone-logbook
-      - ./plugins:/app/plugins  # Mount your custom scripts here
+      - ./data:/data/drone-logbook  # must be writable by UID/GID 65532
+      - ./plugins:/app/plugins:ro   # Mount your custom scripts here (must be readable/executable by UID 65532)
 ```
 
-And configure your `parsers.json` (placed at `/app/plugins/parsers.json` in Docker/web mode) to invoke your script using available tools in the container or standalone binaries:
+And configure your `parsers.json` (placed at `/app/plugins/parsers.json` in Docker/web mode) to invoke your script using Python or a standalone binary (executables must have the execute bit set and be readable by UID `65532`):
 ```json
 {
   "mappings": {
@@ -210,7 +217,7 @@ If your custom parser script needs extra Python libraries (for example, `pandas`
 3. Restart the container:
   - `docker compose -f docker-compose-build.yml up -d`
 
-The Dockerfile installs this file during build inside a dedicated virtualenv (`/opt/parser-venv`) and prepends that venv to `PATH`, so parser commands like `python3` automatically use those installed packages.
+The Dockerfile installs this file during build inside a dedicated virtualenv (`/opt/parser-venv`) and prepends that venv to `PATH`, so parser commands like `python3` automatically use those installed packages. `pip` is not available at runtime, so all packages must be listed in `requirements.txt` before building.
 
 For Docker/web builds, prefer using the explicit venv interpreter path in `parsers.json`:
 
