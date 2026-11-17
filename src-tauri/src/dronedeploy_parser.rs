@@ -22,8 +22,8 @@ const MILLIVOLTS_TO_VOLTS: f64 = 0.001;
 const AMPS_TO_MILLIAMPS: f64 = 1000.0;
 const DJI_RC_STICK_LIMIT: f64 = 660.0;
 
-const HEADER_MARKERS: [&str; 4] = [
-    "Date/Time (GMT)",
+const TIME_HEADER_MARKERS: [&str; 2] = ["Date/Time (GMT)", "Date/Time (UTC)"];
+const HEADER_MARKERS: [&str; 3] = [
     "Elapsed Time (sec)",
     "Aircraft Latitude (Degrees)",
     "Aircraft Longitude (Degrees)",
@@ -205,6 +205,7 @@ impl<'a> DroneDeployParser<'a> {
 
             if let Some(row_time) = columns
                 .get_str(&fields, "Date/Time (GMT)")
+                .or_else(|| columns.get_str(&fields, "Date/Time (UTC)"))
                 .and_then(parse_dronedeploy_datetime)
             {
                 first_row_time.get_or_insert(row_time);
@@ -238,7 +239,9 @@ impl<'a> DroneDeployParser<'a> {
             let vps_height = metric_distance(columns, &fields, "Aircraft Ultrasonic Altitude");
             let rc_signal = columns
                 .get_i32(&fields, "RC Signal 1 (%)")
-                .or_else(|| columns.get_i32(&fields, "RC Signal 2 (%)"));
+                .or_else(|| columns.get_i32(&fields, "RC Signal 2 (%)"))
+                .or_else(|| columns.get_i32(&fields, "RC Signal 1"))
+                .or_else(|| columns.get_i32(&fields, "RC Signal 2"));
 
             points.push(TelemetryPoint {
                 timestamp_ms,
@@ -392,9 +395,12 @@ impl<'a> DroneDeployParser<'a> {
 
 fn is_telemetry_header(line: &str) -> bool {
     let headers: Vec<&str> = line.split('\t').map(str::trim).collect();
-    HEADER_MARKERS
+    TIME_HEADER_MARKERS
         .iter()
-        .all(|marker| headers.iter().any(|header| header == marker))
+        .any(|marker| headers.iter().any(|header| header == marker))
+        && HEADER_MARKERS
+            .iter()
+            .all(|marker| headers.iter().any(|header| header == marker))
 }
 
 fn parse_f64(value: &str) -> Option<f64> {
@@ -703,6 +709,7 @@ Elapsed Time (sec)\t2.000\n";
         assert_eq!(first.battery_current, Some(-1000.0));
         assert_eq!(first.battery_full_capacity, Some(5000.0));
         assert_eq!(first.battery_remained_capacity, Some(4500.0));
+        assert_eq!(first.rc_signal, Some(75));
         assert_eq!(first.rc_aileron, Some(100.0));
         assert_eq!(first.rc_elevator, Some(-50.0));
         assert_eq!(first.rc_throttle, Some(50.0));
@@ -735,6 +742,31 @@ Elapsed Time (sec)\t2.000\n";
         assert!((first.battery_voltage.unwrap() - 16.0).abs() < 1e-9);
         assert!((first.battery_temp.unwrap() - 10.0).abs() < 1e-9);
         assert_eq!(first.battery_current, Some(-1000.0));
+    }
+
+    #[test]
+    fn parses_utc_header_and_legacy_unitless_rc_signal() {
+        let legacy_fixture = FIXTURE
+            .replace("Session Start\t07/22/2026 13:07:14\n", "")
+            .replace("Date/Time (GMT)", "Date/Time (UTC)")
+            .replace("RC Signal 1 (%)", "RC Signal 1");
+        let temp_dir = tempdir().unwrap();
+        let tsv_path = temp_dir.path().join("legacy.tsv");
+        std::fs::write(&tsv_path, legacy_fixture).unwrap();
+
+        assert!(DroneDeployParser::is_dronedeploy_log(&tsv_path));
+
+        let db = Database::new(temp_dir.path().join("db"), "default").unwrap();
+        let result = DroneDeployParser::new(&db)
+            .parse(&tsv_path, "legacy-fixture-hash")
+            .unwrap();
+
+        assert_eq!(result.points.len(), 2);
+        assert_eq!(result.points[0].rc_signal, Some(75));
+        assert_eq!(
+            result.metadata.start_time.unwrap().to_rfc3339(),
+            "2026-07-22T13:07:14+00:00"
+        );
     }
 
     #[test]
