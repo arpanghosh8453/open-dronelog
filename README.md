@@ -128,6 +128,10 @@ After installation, run it and check the tray menu (it usually gets minimizedto 
 
 ### DJI Cloud logs sync
 
+<p align="center">
+    <img src="screenshots/Syncing.png" alt="DJI Logs Sync application" width="900" />
+</p>
+
 [Drone Cloud Sync](https://github.com/arpanghosh8453/Drone-Cloud-Sync) is an add-on application that fetches flight logs backed up in DJI Cloud directly to a local folder on your device. Set that folder as Open DroneLog's sync folder for seamless, wireless syncing. To avoid legal issues, the add-on is maintained separately and is not integrated into this application.
 
 ### Manual Log collection
