@@ -1,26 +1,6 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
-:root {
-  --drone-primary: 0 160 220;
-  --drone-secondary: 26 26 46;
-  --drone-accent: 0 212 170;
-  --drone-dark: 15 15 26;
-  --drone-surface: 22 33 62;
-  --drone-muted: 74 78 105;
-
-}
-
-body.theme-light {
-  --drone-primary: 0 122 204;
-  --drone-secondary: 244 247 250;
-  --drone-accent: 16 185 129;
-  --drone-dark: 248 250 252;
-  --drone-surface: 255 255 255;
-  --drone-muted: 148 163 184;
-  scrollbar-color: #cbd5e1 #f1f5f9;
-}
-
 body.theme-light .text-gray-400 {
   color: #64748b !important;
 }
@@ -253,7 +233,7 @@ body.theme-light .flight-messages-modal .hover\:bg-blue-900\/10:hover {
 
 /* Light mode: flight tags */
 body.theme-light .text-teal-300 {
-  color: #0d9488 !important;
+  color: #4f786c !important;
 }
 
 body.theme-light .border-teal-500\/40 {
@@ -265,7 +245,7 @@ body.theme-light .bg-teal-500\/10 {
 }
 
 body.theme-light .text-violet-300 {
-  color: #7c3aed !important;
+  color: #75618f !important;
 }
 
 body.theme-light .border-violet-500\/40 {
@@ -277,7 +257,7 @@ body.theme-light .bg-violet-500\/10 {
 }
 
 body.theme-light .text-violet-200 {
-  color: #6d28d9 !important;
+  color: #66527e !important;
 }
 
 body.theme-light .hover\:bg-violet-500\/20:hover {
@@ -285,28 +265,28 @@ body.theme-light .hover\:bg-violet-500\/20:hover {
 }
 
 body.theme-light .hover\:text-violet-200:hover {
-  color: #6d28d9 !important;
+  color: #66527e !important;
 }
 
 body.theme-light .hover\:border-violet-400:hover {
-  border-color: #8b5cf6 !important;
+  border-color: #8c84a6 !important;
 }
 
 body.theme-light .hover\:text-violet-400:hover {
-  color: #7c3aed !important;
+  color: #75618f !important;
 }
 
 body.theme-light .focus\:border-violet-500:focus {
-  border-color: #8b5cf6 !important;
+  border-color: #8c84a6 !important;
 }
 
 /* Light mode: settings modal button text */
 body.theme-light .text-teal-400 {
-  color: #0d9488 !important;
+  color: #4f786c !important;
 }
 
 body.theme-light .border-teal-600 {
-  border-color: #0d9488 !important;
+  border-color: #4f786c !important;
 }
 
 body.theme-light .hover\:bg-teal-500\/10:hover {
@@ -553,7 +533,7 @@ body.overlay-active .settings-scroll {
 /* Component layer */
 @layer components {
   .btn-primary {
-    @apply bg-drone-primary hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-drone-primary text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
@@ -561,7 +541,7 @@ body.overlay-active .settings-scroll {
   }
 
   .card {
-    @apply bg-drone-surface rounded-xl border border-gray-700/50 shadow-lg shadow-black/20;
+    @apply bg-drone-surface rounded-xl border border-gray-700/50;
   }
 
   /* Resizable container styling */
@@ -587,7 +567,7 @@ body.overlay-active .settings-scroll {
     background-color: rgb(var(--drone-surface));
     border-radius: 0.75rem;
     border: 1px solid rgba(107, 114, 128, 0.5);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+    box-shadow: none;
     padding: 1rem;
     display: flex;
     flex-direction: column;
@@ -685,8 +665,8 @@ body.theme-light .input {
 
 /* MapLibre GL styling */
 .maplibregl-ctrl-group {
-  background: #16213e !important;
-  border: 1px solid #4a4e69 !important;
+  background: rgb(var(--drone-surface)) !important;
+  border: 1px solid var(--ui-border) !important;
 }
 
 body.theme-light .maplibregl-ctrl-group {
@@ -994,8 +974,8 @@ body.theme-light .dual-range-input::-moz-range-thumb {
 
 /* ECharts tooltip customization */
 .echarts-tooltip {
-  background: #16213e !important;
-  border: 1px solid #4a4e69 !important;
+  background: rgb(var(--drone-surface)) !important;
+  border: 1px solid var(--ui-border) !important;
   border-radius: 8px !important;
 }
 
@@ -1138,7 +1118,7 @@ body.theme-light .echarts-tooltip .tooltip-time-tag {
 
 /* Light mode: ensure spinner border is visible */
 body.theme-light .spinner.border-drone-primary {
-  border-color: rgb(0, 122, 204) !important;
+  border-color: rgb(var(--drone-primary)) !important;
   border-top-color: transparent !important;
 }
 
@@ -1206,7 +1186,7 @@ body.theme-light .spinner.border-drone-primary {
 
 body.theme-light .milestone-timeline {
   --milestone-track: rgba(148, 163, 184, 0.25);
-  --milestone-fill: linear-gradient(90deg, #0284c7, #0891b2, #0d9488);
+  --milestone-fill: linear-gradient(90deg, #0284c7, #0891b2, #4f786c);
   --milestone-glow: rgba(2, 132, 199, 0.25);
   --milestone-node-inactive: rgba(148, 163, 184, 0.5);
   --milestone-node-active: linear-gradient(135deg, #0284c7, #0891b2);

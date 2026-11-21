@@ -44,6 +44,7 @@ import {
   type UnitPreferences,
 } from '@/lib/utils';
 import { useFlightStore } from '@/stores/flightStore';
+import { chartFontFamily, chartSeriesColors, getChartTheme } from '@/lib/chartTheme';
 import { FlightClusterMap } from './FlightClusterMap';
 import { EmailSignatureModal } from './EmailSignatureModal';
 import { DatePickerPopover } from '@/components/ui/DatePickerPopover';
@@ -622,7 +623,7 @@ function StatCard({
   return (
     <div className={`stat-card ${small ? 'py-3' : ''} ${className}`}>
       {icon && <div className="text-drone-primary mb-1">{icon}</div>}
-      <span className={small ? 'text-lg font-bold text-white' : 'stat-value'}>{value}</span>
+      <span className={small ? 'ui-data text-lg text-white' : 'stat-value'}>{value}</span>
       <span className={small ? 'text-xs text-gray-400' : 'stat-label'}>{label}</span>
     </div>
   );
@@ -726,7 +727,7 @@ function PilotMilestoneTimeline({ totalHours, onGetSignature }: { totalHours: nu
       {/* Single-line timeline with labels */}
       <div className="flex items-center gap-4">
         {/* Current rank icon */}
-        <div className="text-cyan-400 flex-shrink-0">
+        <div className="text-drone-primary flex-shrink-0">
           <currentMilestone.icon />
         </div>
 
@@ -1074,18 +1075,12 @@ function ActivityHeatmap({
 
   const getColor = (count: number) => {
     if (count < 0) return 'transparent';
-    if (count === 0) return isLight ? '#e2e8f0' : '#2f3548';
+    if (count === 0) return isLight ? '#e3e7ec' : '#353d47';
     const intensity = Math.min(count / Math.max(maxCount, 1), 1);
-    if (isLight) {
-      const r = Math.round(94 + intensity * 0);
-      const g = Math.round(134 + intensity * 102);
-      const b = Math.round(183 + intensity * 72);
-      return `rgb(${r}, ${g}, ${b})`;
-    }
-    const r = Math.round(20 + intensity * 0);
-    const g = Math.round(80 + intensity * 150);
-    const b = Math.round(110 + intensity * 120);
-    return `rgb(${r}, ${g}, ${b})`;
+    const from = isLight ? [178, 199, 222] : [57, 78, 103];
+    const to = isLight ? [52, 94, 144] : [146, 182, 224];
+    const channels = from.map((channel, i) => Math.round(channel + (to[i] - channel) * intensity));
+    return `rgb(${channels.join(', ')})`;
   };
 
   const dayLabels = [t('overview.sun'), t('overview.mon'), t('overview.tue'), t('overview.wed'), t('overview.thu'), t('overview.fri'), t('overview.sat')];
@@ -1402,7 +1397,7 @@ function DroneFlightTimeList({
                       className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
                       style={{
                         width: `${progressPercent}%`,
-                        backgroundColor: decomm ? '#6b7280' : (isLight ? '#0ea5e9' : '#00a0dc'),
+                        backgroundColor: decomm ? '#6b7280' : (isLight ? '#537bab' : '#78a1d3'),
                       }}
                     />
                   </div>
@@ -1427,6 +1422,8 @@ function DonutChart({
   emptyMessage: string;
 }) {
   const { t } = useTranslation();
+  const themeMode = useFlightStore((state) => state.themeMode);
+  const chartTheme = getChartTheme(resolveThemeMode(themeMode) === 'light');
   const chartRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
 
@@ -1445,16 +1442,7 @@ function DonutChart({
     return <p className="text-sm text-gray-400 text-center py-8">{emptyMessage}</p>;
   }
 
-  const colors = [
-    '#00a0dc', // DJI blue
-    '#00d4aa', // Teal accent
-    '#f59e0b', // Amber
-    '#8b5cf6', // Purple
-    '#ec4899', // Pink
-    '#10b981', // Emerald
-    '#f97316', // Orange
-    '#6366f1', // Indigo
-  ];
+  const colors = chartSeriesColors;
 
   // Fixed chart height
   const chartHeight = 200;
@@ -1475,11 +1463,12 @@ function DonutChart({
   const decommissionedByName = new Map(data.map((item) => [item.name, !!item.decommissioned]));
 
   const option = {
+    textStyle: { fontFamily: chartFontFamily },
     tooltip: {
       trigger: 'item' as const,
-      backgroundColor: 'rgba(22, 33, 62, 0.95)',
-      borderColor: '#374151',
-      textStyle: { color: '#e5e7eb' },
+      backgroundColor: chartTheme.background,
+      borderColor: chartTheme.border,
+      textStyle: { color: chartTheme.text },
       formatter: (params: { name: string; value: number; percent: number }) => {
         const label = labelByName.get(params.name) || params.name;
         return `<strong>${label}</strong><br/>${t('overview.donutTooltip', { value: params.value, percent: params.percent.toFixed(1) })}`;
@@ -1491,7 +1480,7 @@ function DonutChart({
       left: legendLeft,
       top: 'center',
       width: legendWidth,
-      pageTextStyle: { color: '#9ca3af' },
+      pageTextStyle: { color: chartTheme.label },
       tooltip: { show: true },
       formatter: (name: string) => {
         const label = labelByName.get(name) || name;
@@ -1501,13 +1490,13 @@ function DonutChart({
         return label;
       },
       textStyle: {
-        color: '#9ca3af',
+        color: chartTheme.label,
         fontSize: 11,
         overflow: 'truncate' as const,
         width: legendWidth - 24,
         rich: {
           decom: {
-            color: '#6b7280',
+            color: chartTheme.label,
             fontSize: 11,
           },
         },
@@ -1582,6 +1571,8 @@ function FlightTimeRadialChart({
   emptyMessage: string;
 }) {
   const { t } = useTranslation();
+  const themeMode = useFlightStore((state) => state.themeMode);
+  const chartTheme = getChartTheme(resolveThemeMode(themeMode) === 'light');
 
   // Bucket flights into 24 hours
   const hourCounts = useMemo(() => {
@@ -1612,19 +1603,20 @@ function FlightTimeRadialChart({
 
   // Color gradient: cooler (night) -> warmer (day)
   const getBarColor = (hour: number) => {
-    if (hour >= 6 && hour < 10) return '#f59e0b';   // Morning - amber
-    if (hour >= 10 && hour < 14) return '#00d4aa';   // Midday - teal
-    if (hour >= 14 && hour < 18) return '#00a0dc';   // Afternoon - blue
-    if (hour >= 18 && hour < 21) return '#8b5cf6';   // Evening - purple
-    return '#6366f1';                                  // Night - indigo
+    if (hour >= 6 && hour < 10) return '#b18c50';   // Morning - amber
+    if (hour >= 10 && hour < 14) return '#739b91';   // Midday - teal
+    if (hour >= 14 && hour < 18) return '#537bab';   // Afternoon - blue
+    if (hour >= 18 && hour < 21) return '#8c84a6';   // Evening - purple
+    return '#7b91ac';                                  // Night - indigo
   };
 
   const option = {
+    textStyle: { fontFamily: chartFontFamily },
     tooltip: {
       trigger: 'item' as const,
-      backgroundColor: 'rgba(22, 33, 62, 0.95)',
-      borderColor: '#374151',
-      textStyle: { color: '#e5e7eb' },
+      backgroundColor: chartTheme.background,
+      borderColor: chartTheme.border,
+      textStyle: { color: chartTheme.text },
       formatter: (params: { dataIndex: number; value: number }) => {
         const hour = params.dataIndex;
         const from = hour.toString().padStart(2, '0') + ':00';
@@ -1641,11 +1633,11 @@ function FlightTimeRadialChart({
       boundaryGap: true,
       axisTick: { show: false },
       axisLabel: {
-        color: '#9ca3af',
+        color: chartTheme.label,
         fontSize: 10,
         formatter: (value: string) => value,
       },
-      axisLine: { lineStyle: { color: '#374151' } },
+      axisLine: { lineStyle: { color: chartTheme.grid } },
       splitLine: { show: false },
       startAngle: 90,
     },
@@ -1656,7 +1648,7 @@ function FlightTimeRadialChart({
       axisTick: { show: false },
       axisLabel: { show: false },
       splitLine: {
-        lineStyle: { color: '#374151', type: 'dashed' as const },
+        lineStyle: { color: chartTheme.grid, type: 'dashed' as const },
       },
     },
     series: [
@@ -1984,15 +1976,14 @@ function BatteryHealthList({
     if (allCapY[i] > capYMax) capYMax = allCapY[i];
   }
 
-  const titleColor = isLight ? '#0f172a' : '#e5e7eb';
-  const axisLineColor = isLight ? '#cbd5f5' : '#374151';
-  const splitLineColor = isLight ? '#e2e8f0' : '#1f2937';
-  const axisLabelColor = isLight ? '#475569' : '#9ca3af';
-  const tooltipStyle = isLight
-    ? { background: '#ffffff', border: '#e2e8f0', text: '#0f172a' }
-    : { background: 'rgba(22, 33, 62, 0.95)', border: '#374151', text: '#e5e7eb' };
+  const titleColor = getChartTheme(isLight).text;
+  const axisLineColor = isLight ? '#d6dce3' : '#374151';
+  const splitLineColor = isLight ? '#e3e7ec' : '#1f2937';
+  const axisLabelColor = getChartTheme(isLight).label;
+  const tooltipStyle = getChartTheme(isLight);
 
   const chartOption = {
+    textStyle: { fontFamily: chartFontFamily },
     title: {
       text: t('overview.batteryCapacityHistory'),
       left: 'center',
@@ -2013,7 +2004,7 @@ function BatteryHealthList({
       },
       emphasis: {
         iconStyle: {
-          borderColor: isLight ? '#007acc' : '#00a0dc',
+          borderColor: isLight ? '#345e90' : '#537bab',
         },
       },
     },
@@ -2079,22 +2070,22 @@ function BatteryHealthList({
         height: 18,
         bottom: 28,
         brushSelect: false,
-        borderColor: isLight ? '#cbd5e1' : '#374151',
-        backgroundColor: isLight ? '#f1f5f9' : '#1e293b',
-        fillerColor: isLight ? 'rgba(0, 122, 204, 0.15)' : 'rgba(0, 160, 220, 0.2)',
+        borderColor: isLight ? '#d6dce3' : '#374151',
+        backgroundColor: isLight ? '#f1f3f5' : '#28313b',
+        fillerColor: isLight ? 'rgba(52, 94, 144, 0.15)' : 'rgba(120, 161, 211, 0.2)',
         handleStyle: {
-          color: isLight ? '#007acc' : '#00a0dc',
+          color: isLight ? '#345e90' : '#537bab',
         },
         textStyle: {
           color: axisLabelColor,
         },
         dataBackground: {
-          lineStyle: { color: isLight ? '#94a3b8' : '#4a4e69' },
-          areaStyle: { color: isLight ? '#cbd5e1' : '#2a2a4e' },
+          lineStyle: { color: isLight ? '#94a3b8' : '#4f5b6a' },
+          areaStyle: { color: isLight ? '#d6dce3' : '#353d47' },
         },
         selectedDataBackground: {
-          lineStyle: { color: isLight ? '#007acc' : '#00a0dc' },
-          areaStyle: { color: isLight ? 'rgba(0, 122, 204, 0.1)' : 'rgba(0, 160, 220, 0.15)' },
+          lineStyle: { color: isLight ? '#345e90' : '#537bab' },
+          areaStyle: { color: isLight ? 'rgba(52, 94, 144, 0.1)' : 'rgba(120, 161, 211, 0.15)' },
         },
       },
     ],
@@ -2134,7 +2125,7 @@ function BatteryHealthList({
           const decomm = isDecommissioned(displayName);
           const healthColor = decomm
             ? '#6b7280'
-            : healthPercent > 70 ? '#10b981' : healthPercent > 40 ? '#f59e0b' : '#ef4444';
+            : healthPercent > 70 ? '#10b981' : healthPercent > 40 ? '#b18c50' : '#ef4444';
           const isEditing = editingSerial === battery.batterySerial;
 
           return (
@@ -2224,8 +2215,8 @@ function BatteryHealthList({
             onClick={() => setCapBatteryDropdownOpen((v) => !v)}
             className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors"
             style={{
-              borderColor: isLight ? '#cbd5e1' : '#374151',
-              background: isLight ? '#f8fafc' : '#1e293b',
+              borderColor: isLight ? '#d6dce3' : '#374151',
+              background: isLight ? '#f8f9fa' : '#28313b',
               color: selectedCapBatteries.length > 0 ? (isLight ? '#0f172a' : '#e5e7eb') : (isLight ? '#94a3b8' : '#6b7280'),
             }}
           >
@@ -2246,8 +2237,8 @@ function BatteryHealthList({
             <div
               className="absolute z-50 mt-1 w-56 rounded-lg shadow-lg border overflow-hidden"
               style={{
-                borderColor: isLight ? '#e2e8f0' : '#374151',
-                background: isLight ? '#ffffff' : '#1e293b',
+                borderColor: isLight ? '#e3e7ec' : '#374151',
+                background: isLight ? '#ffffff' : '#28313b',
               }}
             >
               <div className="p-1.5">
@@ -2258,8 +2249,8 @@ function BatteryHealthList({
                   placeholder={t('overview.searchBatteries')}
                   className="w-full px-2 py-1 text-xs rounded border outline-none"
                   style={{
-                    borderColor: isLight ? '#e2e8f0' : '#374151',
-                    background: isLight ? '#f8fafc' : '#0f172a',
+                    borderColor: isLight ? '#e3e7ec' : '#374151',
+                    background: isLight ? '#f8f9fa' : '#0f172a',
                     color: isLight ? '#0f172a' : '#e5e7eb',
                   }}
                   autoFocus
@@ -2279,15 +2270,15 @@ function BatteryHealthList({
                         style={{
                           color: isLight ? '#0f172a' : '#e5e7eb',
                           background: checked
-                            ? (isLight ? '#eff6ff' : 'rgba(0, 160, 220, 0.1)')
+                            ? (isLight ? '#eff6ff' : 'rgba(120, 161, 211, 0.1)')
                             : 'transparent',
                         }}
                       >
                         <span
                           className="w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0"
                           style={{
-                            borderColor: checked ? '#00a0dc' : (isLight ? '#cbd5e1' : '#4b5563'),
-                            background: checked ? '#00a0dc' : 'transparent',
+                            borderColor: checked ? '#537bab' : (isLight ? '#d6dce3' : '#4b5563'),
+                            background: checked ? '#537bab' : 'transparent',
                           }}
                         >
                           {checked && (
@@ -2303,7 +2294,7 @@ function BatteryHealthList({
                 )}
               </div>
               {selectedCapBatteries.length > 0 && (
-                <div className="border-t px-2 py-1.5" style={{ borderColor: isLight ? '#e2e8f0' : '#374151' }}>
+                <div className="border-t px-2 py-1.5" style={{ borderColor: isLight ? '#e3e7ec' : '#374151' }}>
                   <button
                     onClick={() => setSelectedCapBatteries([])}
                     className="text-[10px] text-sky-500 hover:text-sky-400"
@@ -2620,7 +2611,7 @@ function MaintenanceSection({
 
   const getProgressBarColor = (percent: number) => {
     if (percent >= 90) return '#ef4444'; // red
-    if (percent >= 75) return '#f97316'; // orange
+    if (percent >= 75) return '#b17c57'; // orange
     if (percent >= 60) return '#eab308'; // yellow
     return '#10b981'; // green
   };

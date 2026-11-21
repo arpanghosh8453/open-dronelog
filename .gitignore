@@ -57,3 +57,13 @@ src-tauri/bindings/
 *.jks.b64
 opendronelog-upload.jks
 opendronelog-upload.jks.b64
+
+# Miscellaneous
+.github/agents
+.github/hooks
+.github/skills
+.codex
+.agents
+.impeccable
+PRODUCT.md
+DESIGN.md

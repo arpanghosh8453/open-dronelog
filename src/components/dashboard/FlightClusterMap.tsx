@@ -715,7 +715,7 @@ export function FlightClusterMap({
 
   if (geojson.features.length === 0) {
     return (
-      <div className={`card p-4 transition-all duration-300 ${mapAreaFilterEnabled ? 'ring-2 ring-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : ''}`}>
+      <div className={`card p-4 transition-all duration-300 ${mapAreaFilterEnabled ? 'ring-2 ring-drone-primary/40' : ''}`}>
         <h3 className="text-sm font-semibold mb-3">
           <span className="text-white">{t('clusterMap.flightLocations')}</span>
           {mapAreaFilterEnabled && (
@@ -731,7 +731,7 @@ export function FlightClusterMap({
 
   return (
     <div
-      className={`card p-4 transition-all duration-300 resize-y overflow-hidden ${mapAreaFilterEnabled ? 'ring-2 ring-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : ''}`}
+      className={`card p-4 transition-all duration-300 resize-y overflow-hidden ${mapAreaFilterEnabled ? 'ring-2 ring-drone-primary/40' : ''}`}
       style={{ height: 480, minHeight: 480, maxHeight: 850 }}
     >
       <h3 className="text-sm font-semibold mb-3">

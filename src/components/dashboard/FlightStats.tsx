@@ -450,7 +450,7 @@ export function FlightStats({ data }: FlightStatsProps) {
             onClick={() => setIsWeatherOpen(true)}
             disabled={!flight.homeLat || !flight.homeLon || !flight.startTime}
             title={t('flightStats.flightWeather')}
-            className="h-full min-h-[52px] w-[62px] flex items-center justify-center rounded-lg border-2 border-sky-500/70 text-sky-400 transition-all duration-200 hover:bg-sky-500 hover:text-white hover:shadow-md disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-sky-400"
+            className="h-full min-h-[52px] w-[62px] flex items-center justify-center rounded-lg border-2 border-drone-primary/70 text-drone-primary transition-all duration-200 hover:bg-drone-primary hover:text-white hover:shadow-md disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-drone-primary"
           >
             <WeatherBtnIcon />
           </button>
@@ -535,13 +535,13 @@ function StatCard({ label, value, icon, alert }: StatCardProps) {
             {icon}
           </div>
           <p
-            className={`text-lg font-semibold ${alert ? 'text-red-400' : 'text-white'
+            className={`ui-data text-lg ${alert ? 'text-red-400' : 'text-white'
               }`}
           >
             {value}
           </p>
         </div>
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="ui-stat-label text-xs text-gray-500">{label}</p>
       </div>
     </div>
   );

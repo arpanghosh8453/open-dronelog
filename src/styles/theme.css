@@ -1,0 +1,275 @@
+/* Graphite & Blue. Appearance only: layout, breakpoints and sizing live in index.css. */
+:root {
+  --drone-primary: 120 161 211;
+  --drone-accent: 120 161 211;
+  --drone-dark: 24 28 34;
+  --drone-secondary: 29 34 41;
+  --drone-surface: 34 40 48;
+  --drone-muted: 79 91 106;
+  --ui-text: #ecf0f4;
+  --ui-secondary: #aeb7c2;
+  --ui-muted: #929eac;
+  --ui-border: #3a434f;
+  --ui-input: #1c222a;
+  --ui-hover: #303944;
+  --ui-raised: #28313b;
+  --ui-button: #436d9f;
+  --ui-button-hover: #4a76aa;
+  --ui-shadow: 0 12px 32px rgb(0 0 0 / 0.24);
+  --ui-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ui-heading-weight: 600;
+  --ui-data-weight: 600;
+  --ui-label-weight: 500;
+  --ui-heading-tracking: -0.015em;
+  --ui-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Keep neutral utility colors in the same family as the shell. */
+  --color-gray-100: #edf0f3;
+  --color-gray-200: #d9dfe5;
+  --color-gray-300: #c1c9d2;
+  --color-gray-400: #a1abb7;
+  --color-gray-500: #8a95a2;
+  --color-gray-600: #4b5562;
+  --color-gray-700: #353d47;
+  --color-gray-800: #272e37;
+  --color-gray-900: #1b2129;
+  --color-violet-200: #d4cce1;
+  --color-violet-300: #bcb2ce;
+  --color-violet-400: #a298b8;
+  --color-violet-500: #8c84a6;
+  --color-violet-600: #75618f;
+  --color-purple-400: #a298b8;
+  --color-purple-500: #8c84a6;
+  --color-teal-300: #a8c8be;
+  --color-teal-400: #86b0a2;
+  --color-teal-500: #739b91;
+  --color-teal-600: #4f786c;
+  --color-sky-100: #e3ebf5;
+  --color-sky-200: #d1deee;
+  --color-sky-300: #b0c7e1;
+  --color-sky-400: #78a1d3;
+  --color-sky-500: #537bab;
+  --color-sky-600: #345e90;
+  --color-sky-800: #294e7a;
+  --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.12);
+  --shadow-xl: var(--ui-shadow);
+  --shadow-2xl: var(--ui-shadow);
+}
+
+body.theme-light {
+  --drone-primary: 46 89 141;
+  --drone-accent: 46 89 141;
+  --drone-dark: 241 243 245;
+  --drone-secondary: 248 249 250;
+  --drone-surface: 255 255 255;
+  --drone-muted: 168 177 189;
+  --ui-text: #222b36;
+  --ui-secondary: #536171;
+  --ui-muted: #626f7e;
+  --ui-border: #d6dce3;
+  --ui-input: #ffffff;
+  --ui-hover: #e8edf2;
+  --ui-raised: #ffffff;
+  --ui-button: #345e90;
+  --ui-button-hover: #294e7a;
+  --ui-shadow: 0 12px 32px rgb(30 45 65 / 0.12);
+  color-scheme: light;
+}
+
+body {
+  color: var(--ui-text);
+  color-scheme: dark;
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: antialiased;
+  accent-color: rgb(var(--drone-primary));
+  caret-color: rgb(var(--drone-primary));
+  text-underline-offset: 3px;
+  scrollbar-color: var(--ui-border) transparent;
+}
+
+::selection {
+  background: rgb(var(--drone-primary) / 0.25);
+  color: var(--ui-text);
+}
+
+/* Utility integration also covers portals, which mount directly under body. */
+body .text-gray-400,
+body.theme-light .text-gray-400 { color: var(--ui-secondary) !important; }
+body .text-gray-500,
+body.theme-light .text-gray-500 { color: var(--ui-muted) !important; }
+body .stat-label { color: var(--ui-secondary); }
+body :is(h1, h2, h3) {
+  font-weight: var(--ui-heading-weight);
+  letter-spacing: var(--ui-heading-tracking);
+  text-wrap: balance;
+}
+.ui-data {
+  font-weight: var(--ui-data-weight);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.ui-metadata { font-variant-numeric: lining-nums tabular-nums; }
+body :is(.stat-label, .ui-stat-label) { font-weight: var(--ui-label-weight); }
+.settings-scroll p.leading-relaxed { text-wrap: pretty; }
+body.theme-light :is(.text-white, .text-gray-100, .text-gray-200, .text-gray-300) {
+  color: var(--ui-text) !important;
+}
+body.theme-light :is(.text-gray-600, .text-gray-700) { color: var(--ui-secondary); }
+
+body :is(.border-gray-700, .border-gray-700\/50, .border-gray-600),
+body.theme-light :is(.border-gray-700, .border-gray-700\/50, .border-gray-600) {
+  border-color: var(--ui-border) !important;
+}
+body :is(.card, .stat-card) {
+  border-color: var(--ui-border);
+  box-shadow: none;
+}
+body .stat-value,
+body.theme-light .stat-value {
+  color: var(--ui-text);
+  font-weight: var(--ui-data-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+}
+
+body :is(.input, .themed-select-trigger, .sort-select),
+body.theme-light :is(.input, .themed-select-trigger, .sort-select) {
+  background-color: var(--ui-input) !important;
+  border-color: var(--ui-border) !important;
+  color: var(--ui-text) !important;
+  color-scheme: inherit;
+}
+body :is(input, textarea)::placeholder,
+body.theme-light :is(input, textarea)::placeholder {
+  color: var(--ui-muted) !important;
+  opacity: 1;
+}
+body :is(.themed-select-dropdown, .sort-select option),
+body.theme-light :is(.themed-select-dropdown, .sort-select option) {
+  background: var(--ui-raised) !important;
+  border-color: var(--ui-border) !important;
+  color: var(--ui-text) !important;
+}
+body .themed-select-option,
+body.theme-light .themed-select-option { color: var(--ui-text); }
+body .themed-select-option:is(:hover, [data-active='true']),
+body.theme-light .themed-select-option:is(:hover, [data-active='true']) {
+  background: rgb(var(--drone-primary) / 0.15);
+  color: var(--ui-text);
+}
+body.theme-light .bg-gray-900 { background-color: var(--ui-input) !important; }
+body.theme-light .bg-gray-800 { background-color: rgb(var(--drone-secondary)) !important; }
+body .bg-gray-700,
+body.theme-light .bg-gray-700 { background-color: var(--ui-hover) !important; }
+
+body .btn-primary,
+body button.bg-drone-primary,
+body.theme-light .btn-primary,
+body.theme-light button.bg-drone-primary {
+  background-color: var(--ui-button);
+  color: #ffffff !important;
+  font-weight: var(--ui-label-weight);
+}
+body .btn-primary:not(:disabled):hover,
+body button.bg-drone-primary:enabled:hover { background-color: var(--ui-button-hover); }
+body .btn-secondary,
+body.theme-light .btn-secondary {
+  background-color: var(--ui-input);
+  border-color: var(--ui-border);
+  color: var(--ui-text) !important;
+}
+body .btn-secondary:not(:disabled):hover { background-color: var(--ui-hover); }
+body button:is(.hover\:bg-drone-primary, .hover\:bg-drone-accent):enabled:hover {
+  background-color: var(--ui-button-hover);
+}
+body button:is(.hover\:bg-drone-primary, .hover\:bg-drone-accent).hover\:text-white:enabled:hover,
+body.theme-light button:is(.hover\:bg-drone-primary, .hover\:bg-drone-accent).hover\:text-white:enabled:hover {
+  color: #ffffff !important;
+}
+body :is(.hover\:bg-gray-700, .hover\:bg-gray-700\/30, .hover\:bg-gray-700\/40, .hover\:bg-gray-700\/50):hover,
+body.theme-light :is(.hover\:bg-gray-700, .hover\:bg-gray-700\/30, .hover\:bg-gray-700\/40, .hover\:bg-gray-700\/50):hover {
+  background-color: var(--ui-hover) !important;
+}
+body :is(button, a, input, textarea, select, [role='button']):focus-visible {
+  outline: 2px solid rgb(var(--drone-primary));
+  outline-offset: 3px;
+}
+body :is(button, a, input, textarea, select) {
+  transition-timing-function: var(--ui-ease);
+}
+
+/* Keep exported image text and count badges white over their original media. */
+body .flycard-content .text-white,
+body.theme-light .flycard-content .text-white,
+body.theme-light .msg-badge-count { color: #ffffff !important; }
+
+/* Flat progress and tonal layering replace the decorative cyan glow. */
+.milestone-timeline,
+body.theme-light .milestone-timeline {
+  --milestone-track: var(--ui-border);
+  --milestone-fill: rgb(var(--drone-primary));
+  --milestone-node-active: rgb(var(--drone-primary));
+  --milestone-text: var(--ui-secondary);
+  --milestone-text-active: var(--ui-text);
+  --milestone-label-bg: rgb(var(--drone-secondary));
+  --milestone-card-bg: rgb(var(--drone-secondary));
+  --milestone-card-border: var(--ui-border);
+}
+.milestone-fill,
+.milestone-node.active { box-shadow: none; animation: none; }
+.milestone-badge,
+.milestone-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.supporter-star { animation: none; filter: none; }
+body.theme-light .supporter-badge svg { filter: none !important; }
+
+/* Shared chart, map, and floating-control chrome. */
+.echarts-tooltip,
+body.theme-light .echarts-tooltip {
+  background: var(--ui-raised) !important;
+  border-color: var(--ui-border) !important;
+  color: var(--ui-text) !important;
+}
+.maplibregl-ctrl-group,
+body.theme-light .maplibregl-ctrl-group {
+  background: rgb(var(--drone-surface)) !important;
+  border-color: var(--ui-border) !important;
+}
+.maplibregl-ctrl-group button:hover,
+body.theme-light .maplibregl-ctrl-group button:hover { background-color: var(--ui-hover) !important; }
+.maplibregl-ctrl-group button+button { border-color: var(--ui-border) !important; }
+.sidebar-mobile-btn,
+.sidebar-collapsed-toggle-btn,
+body.theme-light .sidebar-mobile-btn,
+body.theme-light .sidebar-collapsed-toggle-btn {
+  background-color: var(--ui-raised);
+  border-color: var(--ui-border);
+  color: var(--ui-secondary);
+}
+.sidebar-mobile-btn:hover,
+.sidebar-collapsed-toggle-btn:hover,
+body.theme-light .sidebar-mobile-btn:hover,
+body.theme-light .sidebar-collapsed-toggle-btn:hover {
+  background-color: var(--ui-hover);
+  color: var(--ui-text);
+}
+.flight-cluster-popup--dark :is(.maplibregl-popup-content, .popup-body, .popup-footer) {
+  background: rgb(var(--drone-surface));
+}
+.flight-cluster-popup--dark .maplibregl-popup-tip { border-top-color: rgb(var(--drone-surface)); }
+.flight-cluster-popup--dark .popup-stat-label { color: var(--ui-secondary); }
+.dual-range-track { background: var(--ui-border); }
+
+@media (pointer: fine) {
+  body ::-webkit-scrollbar-thumb,
+  body.theme-light ::-webkit-scrollbar-thumb { background-color: var(--ui-border); }
+  body ::-webkit-scrollbar-thumb:hover,
+  body.theme-light ::-webkit-scrollbar-thumb:hover { background-color: var(--ui-muted); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

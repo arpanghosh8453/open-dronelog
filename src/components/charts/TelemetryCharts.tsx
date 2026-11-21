@@ -14,6 +14,7 @@ import { useFlightStore } from '@/stores/flightStore';
 import { useTranslation } from 'react-i18next';
 import ColorPickerModal from '@/components/dashboard/ColorPickerModal';
 import { useIsMobileRuntime } from '@/hooks/platform/useIsMobileRuntime';
+import { chartFontFamily } from '@/lib/chartTheme';
 
 /** Translation function type for passing to chart builders */
 type TFn = (key: string, options?: any) => string;
@@ -46,45 +47,45 @@ const MAX_DISPLAY_JOIN_GAP_SECONDS = 5.0;
 /** All available telemetry fields that can be plotted */
 const TELEMETRY_FIELDS: TelemetryFieldDef[] = [
   // Altitude group
-  { id: 'height', label: 'telemetry.height', color: '#00A0DC', dataKey: 'height', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
-  { id: 'vpsHeight', label: 'telemetry.vpsHeight', color: '#f97316', dataKey: 'vpsHeight', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
-  { id: 'altitude', label: 'telemetry.altitudeGps', color: '#22d3ee', dataKey: 'altitude', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
+  { id: 'height', label: 'telemetry.height', color: '#537bab', dataKey: 'height', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
+  { id: 'vpsHeight', label: 'telemetry.vpsHeight', color: '#b17c57', dataKey: 'vpsHeight', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
+  { id: 'altitude', label: 'telemetry.altitudeGps', color: '#6a9daa', dataKey: 'altitude', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'altitude' },
 
   // Speed group
-  { id: 'speed', label: 'telemetry.speed', color: '#00D4AA', dataKey: 'speed', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'speed' },
+  { id: 'speed', label: 'telemetry.speed', color: '#739b91', dataKey: 'speed', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'speed' },
   { id: 'velocityX', label: 'telemetry.xSpeed', color: '#ef4444', dataKey: 'velocityX', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'velocity' },
-  { id: 'velocityY', label: 'telemetry.ySpeed', color: '#a855f7', dataKey: 'velocityY', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'velocity' },
-  { id: 'velocityZ', label: 'telemetry.zSpeed', color: '#7c3aed', dataKey: 'velocityZ', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'velocity' },
+  { id: 'velocityY', label: 'telemetry.ySpeed', color: '#9b7caf', dataKey: 'velocityY', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'velocity' },
+  { id: 'velocityZ', label: 'telemetry.zSpeed', color: '#79699a', dataKey: 'velocityZ', unit: 'km/h', unitImperial: 'mph', metricFactor: 3.6, imperialFactor: 2.236936, group: 'velocity' },
 
   // Battery group
-  { id: 'battery', label: 'telemetry.batteryPercent', color: '#f59e0b', dataKey: 'battery', unit: '%', group: 'battery' },
-  { id: 'batteryVoltage', label: 'telemetry.voltage', color: '#3b82f6', dataKey: 'batteryVoltage', unit: 'V', group: 'battery' },
+  { id: 'battery', label: 'telemetry.batteryPercent', color: '#b18c50', dataKey: 'battery', unit: '%', group: 'battery' },
+  { id: 'batteryVoltage', label: 'telemetry.voltage', color: '#668dc0', dataKey: 'batteryVoltage', unit: 'V', group: 'battery' },
   { id: 'batteryTemp', label: 'telemetry.temperature', color: '#e11d48', dataKey: 'batteryTemp', unit: '°C', unitImperial: '°F', group: 'battery' },
 
   // Attitude group
-  { id: 'pitch', label: 'telemetry.pitch', color: '#8b5cf6', dataKey: 'pitch', unit: '°', group: 'attitude' },
-  { id: 'roll', label: 'telemetry.roll', color: '#ec4899', dataKey: 'roll', unit: '°', group: 'attitude' },
-  { id: 'yaw', label: 'telemetry.yaw', color: '#14b8a6', dataKey: 'yaw', unit: '°', group: 'attitude' },
+  { id: 'pitch', label: 'telemetry.pitch', color: '#8c84a6', dataKey: 'pitch', unit: '°', group: 'attitude' },
+  { id: 'roll', label: 'telemetry.roll', color: '#a87482', dataKey: 'roll', unit: '°', group: 'attitude' },
+  { id: 'yaw', label: 'telemetry.yaw', color: '#5e958b', dataKey: 'yaw', unit: '°', group: 'attitude' },
 
   // Gimbal group
-  { id: 'gimbalPitch', label: 'telemetry.gimbalPitch', color: '#f97316', dataKey: 'gimbalPitch', unit: '°', group: 'gimbal' },
+  { id: 'gimbalPitch', label: 'telemetry.gimbalPitch', color: '#b17c57', dataKey: 'gimbalPitch', unit: '°', group: 'gimbal' },
   { id: 'gimbalRoll', label: 'telemetry.gimbalRoll', color: '#10b981', dataKey: 'gimbalRoll', unit: '°', group: 'gimbal' },
-  { id: 'gimbalYaw', label: 'telemetry.gimbalYaw', color: '#06b6d4', dataKey: 'gimbalYaw', unit: '°', group: 'gimbal' },
+  { id: 'gimbalYaw', label: 'telemetry.gimbalYaw', color: '#6a9daa', dataKey: 'gimbalYaw', unit: '°', group: 'gimbal' },
 
   // RC group
   { id: 'rcSignal', label: 'telemetry.rcSignal', color: '#22c55e', dataKey: 'rcSignal', unit: '%', group: 'rc' },
-  { id: 'rcUplink', label: 'telemetry.rcUplink', color: '#84cc16', dataKey: 'rcUplink', unit: '%', group: 'rc' },
+  { id: 'rcUplink', label: 'telemetry.rcUplink', color: '#9caa63', dataKey: 'rcUplink', unit: '%', group: 'rc' },
   { id: 'rcDownlink', label: 'telemetry.rcDownlink', color: '#0369a1', dataKey: 'rcDownlink', unit: '%', group: 'rc' },
 
   // GPS group
-  { id: 'satellites', label: 'telemetry.gpsSatellites', color: '#0ea5e9', dataKey: 'satellites', unit: '', group: 'gps' },
+  { id: 'satellites', label: 'telemetry.gpsSatellites', color: '#6a91bb', dataKey: 'satellites', unit: '', group: 'gps' },
   { id: 'distanceToHome', label: 'telemetry.distToHome', color: '#10b981', dataKey: 'distanceToHome', unit: 'm', unitImperial: 'ft', metricFactor: 1, imperialFactor: 3.28084, group: 'gps' },
 
   // Cell Voltages (virtual field that expands to all available cells)
-  { id: 'allCellVoltages', label: 'telemetry.cellVoltages', color: '#fbbf24', dataKey: 'cellVoltages', unit: 'V', group: 'battery' },
+  { id: 'allCellVoltages', label: 'telemetry.cellVoltages', color: '#c3a365', dataKey: 'cellVoltages', unit: 'V', group: 'battery' },
 
   // Battery capacity group
-  { id: 'batteryFullCapacity', label: 'telemetry.fullCapacity', color: '#06b6d4', dataKey: 'batteryFullCapacity', unit: 'mAh', group: 'battery' },
+  { id: 'batteryFullCapacity', label: 'telemetry.fullCapacity', color: '#6a9daa', dataKey: 'batteryFullCapacity', unit: 'mAh', group: 'battery' },
   { id: 'batteryRemainedCapacity', label: 'telemetry.remainedCapacity', color: '#f43f5e', dataKey: 'batteryRemainedCapacity', unit: 'mAh', group: 'battery' },
 ];
 
@@ -293,7 +294,7 @@ function createDynamicChart(
     .filter((f): f is TelemetryFieldDef => f !== undefined);
 
   // Build cell voltage series if selected
-  const cellVoltageColors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#a855f7'];
+  const cellVoltageColors = ['#10b981', '#668dc0', '#b18c50', '#ef4444', '#8c84a6', '#6a9daa', '#9b7caf'];
   let cellVoltageSeries: { label: string; data: (number | null)[]; color: string; unit: string }[] = [];
 
   if (hasAllCellVoltages) {
@@ -423,7 +424,7 @@ function createDynamicChart(
       max: range.max,
       nameTextStyle: { color: s.color },
       axisLine: { lineStyle: { color: s.color } },
-      axisLabel: { color: '#9ca3af' },
+      axisLabel: { color: tooltipColors.text },
       splitLine: { lineStyle: { color: splitLineColor }, show: axisIndex === 0 },
     });
   });
@@ -442,7 +443,7 @@ function createDynamicChart(
       data: legendData,
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis,
     series,
@@ -797,7 +798,7 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
     return telemetryColors[fieldId] || getFieldDef(fieldId)?.color || '#888888';
   }, [telemetryColors]);
   const resolvedTheme = useMemo(() => resolveThemeMode(themeMode), [themeMode]);
-  const splitLineColor = resolvedTheme === 'light' ? '#e2e8f0' : '#2a2a4e';
+  const splitLineColor = resolvedTheme === 'light' ? '#e3e7ec' : '#353d47';
   const tooltipFormatter = useMemo(
     () => createTooltipFormatter(startTime ?? null, resolvedTheme, locale, timeFormat !== '24h'),
     [resolvedTheme, startTime, locale, timeFormat]
@@ -807,12 +808,12 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
       resolvedTheme === 'light'
         ? {
           background: '#ffffff',
-          border: '#e2e8f0',
+          border: '#e3e7ec',
           text: '#0f172a',
         }
         : {
-          background: '#16213e',
-          border: '#4a4e69',
+          background: '#222830',
+          border: '#4f5b6a',
           text: '#ffffff',
         },
     [resolvedTheme]
@@ -1465,15 +1466,16 @@ export function TelemetryCharts({ data, unitPrefs, startTime }: TelemetryChartsP
 /** Shared chart configuration - theme-aware */
 function createBaseChartConfig(theme: 'dark' | 'light'): Partial<EChartsOption> {
   const isLight = theme === 'light';
-  const axisColor = isLight ? '#cbd5e1' : '#4a4e69';
-  const labelColor = isLight ? '#64748b' : '#9ca3af';
-  const zoomBg = isLight ? '#f1f5f9' : '#16213e';
-  const zoomBorder = isLight ? '#cbd5e1' : '#2a2a4e';
-  const zoomFiller = isLight ? 'rgba(0, 122, 204, 0.15)' : 'rgba(0, 160, 220, 0.2)';
-  const handleColor = isLight ? '#007acc' : '#00A0DC';
+  const axisColor = isLight ? '#d6dce3' : '#4f5b6a';
+  const labelColor = isLight ? '#536171' : '#aeb7c2';
+  const zoomBg = isLight ? '#f1f3f5' : '#222830';
+  const zoomBorder = isLight ? '#d6dce3' : '#353d47';
+  const zoomFiller = isLight ? 'rgba(52, 94, 144, 0.15)' : 'rgba(120, 161, 211, 0.2)';
+  const handleColor = isLight ? '#345e90' : '#537bab';
 
   return {
     animation: false,
+    textStyle: { fontFamily: chartFontFamily },
     toolbox: {
       show: true,
       feature: {
@@ -1499,8 +1501,8 @@ function createBaseChartConfig(theme: 'dark' | 'light'): Partial<EChartsOption> 
       trigger: 'axis',
       renderMode: 'html',
       confine: true,
-      backgroundColor: isLight ? '#ffffff' : '#16213e',
-      borderColor: isLight ? '#e2e8f0' : '#4a4e69',
+      backgroundColor: isLight ? '#ffffff' : '#222830',
+      borderColor: isLight ? '#e3e7ec' : '#4f5b6a',
       textStyle: {
         color: isLight ? '#0f172a' : '#fff',
       },
@@ -1565,12 +1567,12 @@ function createBaseChartConfig(theme: 'dark' | 'light'): Partial<EChartsOption> 
           color: labelColor,
         },
         dataBackground: {
-          lineStyle: { color: isLight ? '#94a3b8' : '#4a4e69' },
-          areaStyle: { color: isLight ? '#cbd5e1' : '#2a2a4e' },
+          lineStyle: { color: isLight ? '#94a3b8' : '#4f5b6a' },
+          areaStyle: { color: isLight ? '#d6dce3' : '#353d47' },
         },
         selectedDataBackground: {
           lineStyle: { color: handleColor },
-          areaStyle: { color: isLight ? 'rgba(0, 122, 204, 0.1)' : 'rgba(0, 160, 220, 0.15)' },
+          areaStyle: { color: isLight ? 'rgba(52, 94, 144, 0.1)' : 'rgba(120, 161, 211, 0.15)' },
         },
       },
     ],
@@ -1621,7 +1623,7 @@ function createAltitudeSpeedChart(
       data: [t('telemetry.height'), t('telemetry.vpsHeight'), t('telemetry.speed')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: [
       {
@@ -1630,15 +1632,15 @@ function createAltitudeSpeedChart(
         min: heightRange.min,
         max: heightRange.max,
         nameTextStyle: {
-          color: '#00A0DC',
+          color: '#537bab',
         },
         axisLine: {
           lineStyle: {
-            color: '#00A0DC',
+            color: '#537bab',
           },
         },
         axisLabel: {
-          color: '#9ca3af',
+          color: tooltipColors.text,
         },
         splitLine: {
           lineStyle: {
@@ -1657,15 +1659,15 @@ function createAltitudeSpeedChart(
         min: speedRange.min,
         max: speedRange.max,
         nameTextStyle: {
-          color: '#00D4AA',
+          color: '#739b91',
         },
         axisLine: {
           lineStyle: {
-            color: '#00D4AA',
+            color: '#739b91',
           },
         },
         axisLabel: {
-          color: '#9ca3af',
+          color: tooltipColors.text,
         },
         splitLine: {
           show: false,
@@ -1681,10 +1683,10 @@ function createAltitudeSpeedChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#00A0DC',
+          color: '#537bab',
         },
         lineStyle: {
-          color: '#00A0DC',
+          color: '#537bab',
           width: 2,
         },
         areaStyle: {
@@ -1695,8 +1697,8 @@ function createAltitudeSpeedChart(
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(0, 160, 220, 0.3)' },
-              { offset: 1, color: 'rgba(0, 160, 220, 0.05)' },
+              { offset: 0, color: 'rgba(83, 123, 171, 0.3)' },
+              { offset: 1, color: 'rgba(83, 123, 171, 0.05)' },
             ],
           },
         },
@@ -1709,10 +1711,10 @@ function createAltitudeSpeedChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#f97316',
+          color: '#b17c57',
         },
         lineStyle: {
-          color: '#f97316',
+          color: '#b17c57',
           width: 1.5,
         },
       },
@@ -1724,10 +1726,10 @@ function createAltitudeSpeedChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#00D4AA',
+          color: '#739b91',
         },
         lineStyle: {
-          color: '#00D4AA',
+          color: '#739b91',
           width: 2,
         },
       },
@@ -1763,7 +1765,7 @@ function createBatteryChart(
       data: [t('telemetry.batteryPercent'), t('telemetry.voltage'), t('telemetry.temperature')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: [
       {
@@ -1773,11 +1775,11 @@ function createBatteryChart(
         max: batteryRange.max,
         axisLine: {
           lineStyle: {
-            color: '#f59e0b',
+            color: '#b18c50',
           },
         },
         axisLabel: {
-          color: '#9ca3af',
+          color: tooltipColors.text,
         },
         splitLine: {
           lineStyle: {
@@ -1793,11 +1795,11 @@ function createBatteryChart(
         max: tempRange.max,
         axisLine: {
           lineStyle: {
-            color: '#a855f7',
+            color: '#9b7caf',
           },
         },
         axisLabel: {
-          color: '#9ca3af',
+          color: tooltipColors.text,
         },
         splitLine: {
           show: false,
@@ -1831,10 +1833,10 @@ function createBatteryChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#f59e0b',
+          color: '#b18c50',
         },
         lineStyle: {
-          color: '#f59e0b',
+          color: '#b18c50',
           width: 2,
         },
         areaStyle: {
@@ -1881,10 +1883,10 @@ function createBatteryChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#a855f7',
+          color: '#9b7caf',
         },
         lineStyle: {
-          color: '#a855f7',
+          color: '#9b7caf',
           width: 1.5,
         },
       },
@@ -1895,17 +1897,17 @@ function createBatteryChart(
 // Colors for cell voltage series (up to 12 cells)
 const cellVoltageColors = [
   '#10b981', // emerald-500
-  '#3b82f6', // blue-500
-  '#f59e0b', // amber-500
+  '#668dc0', // blue-500
+  '#b18c50', // amber-500
   '#ef4444', // red-500
-  '#8b5cf6', // violet-500
-  '#ec4899', // pink-500
-  '#14b8a6', // teal-500
-  '#f97316', // orange-500
+  '#8c84a6', // violet-500
+  '#a87482', // pink-500
+  '#5e958b', // teal-500
+  '#b17c57', // orange-500
   '#6366f1', // indigo-500
-  '#84cc16', // lime-500
-  '#06b6d4', // cyan-500
-  '#a855f7', // purple-500
+  '#9caa63', // lime-500
+  '#6a9daa', // cyan-500
+  '#9b7caf', // purple-500
 ];
 
 function createCellVoltageChart(
@@ -1980,7 +1982,7 @@ function createCellVoltageChart(
       data: legendData,
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
@@ -1993,7 +1995,7 @@ function createCellVoltageChart(
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
         formatter: '{value}',
       },
       splitLine: {
@@ -2032,23 +2034,23 @@ function createAttitudeChart(
       data: [t('telemetry.pitch'), t('telemetry.roll'), t('telemetry.yaw')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
       name: t('telemetry.rotations'),
       nameTextStyle: {
-        color: '#8b5cf6',
+        color: '#8c84a6',
       },
       min: attitudeRange.min,
       max: attitudeRange.max,
       axisLine: {
         lineStyle: {
-          color: '#8b5cf6',
+          color: '#8c84a6',
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
       },
       splitLine: {
         lineStyle: {
@@ -2064,10 +2066,10 @@ function createAttitudeChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#8b5cf6',
+          color: '#8c84a6',
         },
         lineStyle: {
-          color: '#8b5cf6',
+          color: '#8c84a6',
           width: 1.5,
         },
       },
@@ -2078,10 +2080,10 @@ function createAttitudeChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#ec4899',
+          color: '#a87482',
         },
         lineStyle: {
-          color: '#ec4899',
+          color: '#a87482',
           width: 1.5,
         },
       },
@@ -2092,10 +2094,10 @@ function createAttitudeChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#14b8a6',
+          color: '#5e958b',
         },
         lineStyle: {
-          color: '#14b8a6',
+          color: '#5e958b',
           width: 1.5,
         },
       },
@@ -2133,23 +2135,23 @@ function createGimbalChart(
       data: [t('telemetry.gimbalPitch'), t('telemetry.gimbalRoll'), t('telemetry.gimbalYaw')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
       name: t('telemetry.gimbalRotations'),
       nameTextStyle: {
-        color: '#f97316',
+        color: '#b17c57',
       },
       min: gimbalRange.min,
       max: gimbalRange.max,
       axisLine: {
         lineStyle: {
-          color: '#f97316',
+          color: '#b17c57',
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
       },
       splitLine: {
         lineStyle: {
@@ -2165,10 +2167,10 @@ function createGimbalChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#f97316',
+          color: '#b17c57',
         },
         lineStyle: {
-          color: '#f97316',
+          color: '#b17c57',
           width: 1.5,
         },
       },
@@ -2193,10 +2195,10 @@ function createGimbalChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#06b6d4',
+          color: '#6a9daa',
         },
         lineStyle: {
-          color: '#06b6d4',
+          color: '#6a9daa',
           width: 1.5,
         },
       },
@@ -2286,7 +2288,7 @@ function createRcSignalChart(
       data: showCombined ? [t('telemetry.rcSignal')] : [t('telemetry.rcUplink'), t('telemetry.rcDownlink')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
@@ -2300,7 +2302,7 @@ function createRcSignalChart(
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
         formatter: (value: number) => (value % 50 === 0 ? String(value) : ''),
       },
       splitLine: {
@@ -2342,7 +2344,7 @@ function createDistanceToHomeChart(
       data: [t('telemetry.distToHome')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
@@ -2355,7 +2357,7 @@ function createDistanceToHomeChart(
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
       },
       splitLine: {
         lineStyle: {
@@ -2413,7 +2415,7 @@ function createVelocityChart(
       data: [t('telemetry.xSpeed'), t('telemetry.ySpeed'), t('telemetry.zSpeed')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
@@ -2428,11 +2430,11 @@ function createVelocityChart(
       max: speedRange.max,
       axisLine: {
         lineStyle: {
-          color: '#f59e0b',
+          color: '#b18c50',
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
       },
       splitLine: {
         lineStyle: {
@@ -2448,10 +2450,10 @@ function createVelocityChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#f59e0b',
+          color: '#b18c50',
         },
         lineStyle: {
-          color: '#f59e0b',
+          color: '#b18c50',
           width: 1.5,
         },
       },
@@ -2462,10 +2464,10 @@ function createVelocityChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#ec4899',
+          color: '#a87482',
         },
         lineStyle: {
-          color: '#ec4899',
+          color: '#a87482',
           width: 1.5,
         },
       },
@@ -2548,7 +2550,7 @@ function createGpsChart(
       data: [t('telemetry.gpsSatellites')],
     },
     xAxis: {
-      ...createTimeAxis(data.time),
+      ...createTimeAxis(data.time, tooltipColors.text),
     },
     yAxis: {
       type: 'value',
@@ -2557,11 +2559,11 @@ function createGpsChart(
       max: gpsRange.max,
       axisLine: {
         lineStyle: {
-          color: '#0ea5e9',
+          color: '#6a91bb',
         },
       },
       axisLabel: {
-        color: '#9ca3af',
+        color: tooltipColors.text,
       },
       splitLine: {
         lineStyle: {
@@ -2577,10 +2579,10 @@ function createGpsChart(
         smooth: true,
         symbol: 'none',
         itemStyle: {
-          color: '#0ea5e9',
+          color: '#6a91bb',
         },
         lineStyle: {
-          color: '#0ea5e9',
+          color: '#6a91bb',
           width: 1.5,
         },
       },
@@ -2710,7 +2712,7 @@ function formatTooltipHeader(
   }).format(timestamp));
   const durationBg = theme === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'rgba(0,212,170,0.2)';
   const timeBg = theme === 'light' ? 'rgba(2, 132, 199, 0.12)' : 'rgba(0,160,220,0.22)';
-  const textColor = theme === 'light' ? '#0f172a' : '#e2e8f0';
+  const textColor = theme === 'light' ? '#0f172a' : '#e3e7ec';
   return `<div style="margin-bottom:0px;display:flex;gap:6px;align-items:center;">
     <span class="tooltip-duration-tag" style="display:inline-block;padding:2px 8px;border-radius:999px;background:${durationBg};color:${textColor};font-size:11px;line-height:1.2;">${durationLabel}</span>
     <span class="tooltip-time-tag" style="display:inline-block;padding:2px 8px;border-radius:999px;background:${timeBg};color:${textColor};font-size:11px;line-height:1.2;">${timeLabel}</span>
@@ -2733,7 +2735,7 @@ function formatNumericValue(value: number): string {
   return value.toFixed(2).replace(/\.00$/, '');
 }
 
-function createTimeAxis(time: number[]): EChartsOption['xAxis'] {
+function createTimeAxis(time: number[], labelColor: string): EChartsOption['xAxis'] {
   const values = time.map((t) => t.toFixed(1));
   return {
     type: 'category',
@@ -2741,14 +2743,14 @@ function createTimeAxis(time: number[]): EChartsOption['xAxis'] {
     data: values,
     axisLine: {
       lineStyle: {
-        color: '#4a4e69',
+        color: '#4f5b6a',
       },
     },
     axisTick: {
       alignWithLabel: true,
     } as any,
     axisLabel: {
-      color: '#9ca3af',
+      color: labelColor,
       showMinLabel: false,
       showMaxLabel: false,
       hideOverlap: true,

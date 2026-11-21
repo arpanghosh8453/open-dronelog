@@ -619,9 +619,9 @@ export function Dashboard() {
         <div className="fixed right-6 mobile-safe-fixed-bottom z-40 md:hidden">
           <button
             onClick={() => setIsSidebarHidden(false)}
-            className="p-4 bg-drone-primary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-sky-400 transition-colors"
+            className="p-4 bg-drone-primary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-drone-primary transition-colors"
             title={t('dashboard.showSidebar')}
-            style={{ boxShadow: '0 4px 14px 0 rgba(14, 165, 233, 0.39)' }}
+            style={{ boxShadow: 'var(--ui-shadow)' }}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
@@ -643,9 +643,9 @@ export function Dashboard() {
             <div className="flex flex-col items-center gap-4">
               <div
                 className="w-12 h-12 rounded-full spinner"
-                style={{ border: '4px solid #38bdf8', borderTopColor: 'transparent' }}
+                style={{ border: '4px solid rgb(var(--drone-primary))', borderTopColor: 'transparent' }}
               />
-              <p className="text-sm" style={{ color: '#64748b' }}>{t('dashboard.loadingFlightData')}</p>
+              <p className="text-sm" style={{ color: 'var(--ui-muted)' }}>{t('dashboard.loadingFlightData')}</p>
             </div>
           </div>
         ) : activeView === 'overview' ? (

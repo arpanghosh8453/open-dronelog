@@ -109,7 +109,7 @@ export function WeatherModal({ isOpen, onClose, lat, lon, startTime, temperature
         <div className="flex-1 p-5 min-h-0 overflow-y-auto">
           {loading && (
             <div className="flex flex-col items-center justify-center py-10">
-              <svg className="w-8 h-8 text-sky-400 animate-spin" viewBox="0 0 24 24" fill="none">
+              <svg className="w-8 h-8 text-drone-primary animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
                 <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="opacity-75" />
               </svg>
@@ -148,7 +148,7 @@ export function WeatherModal({ isOpen, onClose, lat, lon, startTime, temperature
                 {/* Reverse-geocoded home-point location */}
                 <div className="mb-4 rounded-lg bg-drone-surface/40 border border-gray-700/50 px-3 py-2.5">
                   <div className="flex items-start gap-2.5">
-                    <LocationPinIcon className="w-4 h-4 text-cyan-400 mt-0.5 shrink-0" />
+                    <LocationPinIcon className="w-4 h-4 text-drone-primary mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-xs text-gray-500">{t('weather.location')}</p>
                       <p className="text-sm text-gray-200 leading-snug break-words">
@@ -168,7 +168,7 @@ export function WeatherModal({ isOpen, onClose, lat, lon, startTime, temperature
                     value={fmtTemp(weather.apparentTemperature)}
                   />
                   <WeatherStat
-                    icon={<WindIcon className="w-5 h-5 text-cyan-400" />}
+                    icon={<WindIcon className="w-5 h-5 text-drone-primary" />}
                     label={t('weather.windSpeed')}
                     value={fmtSpeed(weather.windSpeed)}
                   />

@@ -2734,7 +2734,7 @@ export function FlightList({
             </div>
 
             {/* Scrollable filter fields container */}
-            <div className={`relative rounded-lg border-2 transition-all duration-200 ${hasScrollboxFilter ? 'border-emerald-400/70 shadow-[0_0_12px_rgba(52,211,153,0.35),0_0_4px_rgba(52,211,153,0.2)]' : 'border-sky-400/50 shadow-[0_0_10px_rgba(56,189,248,0.25),0_0_4px_rgba(56,189,248,0.15)]'}`}>
+            <div className={`relative rounded-lg border-2 transition-all duration-200 ${hasScrollboxFilter ? 'border-drone-primary/70' : 'border-drone-muted/50'}`}>
               <div className="max-h-[190px] overflow-y-auto overflow-x-hidden space-y-3 py-2.5 pl-2.5 pr-4 filter-scroll-area">
 
                     {/* Filter profile row */}
@@ -2888,7 +2888,7 @@ export function FlightList({
                               <button
                                 type="button"
                                 onClick={handleCreateOrOverwriteFilterProfile}
-                                className="text-xs text-drone-primary hover:text-cyan-300"
+                                className="text-xs text-drone-primary hover:text-drone-primary"
                               >
                                 {t('profile.create')}
                               </button>
@@ -3212,10 +3212,10 @@ export function FlightList({
                                         type="button"
                                         onClick={() => !isDisabled && setSelectedDrones((prev) => isSelected ? prev.filter((k) => k !== drone.key) : [...prev, drone.key])}
                                         onMouseEnter={() => !isDisabled && setDroneHighlightedIndex(index)}
-                                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${isDisabled ? 'opacity-35 cursor-default' : isSelected ? 'bg-sky-500/20 text-gray-800 dark:text-sky-200' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'
+                                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${isDisabled ? 'opacity-35 cursor-default' : isSelected ? 'bg-drone-primary/20 text-gray-800 dark:text-drone-primary' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'
                                           } ${!isDisabled && index === droneHighlightedIndex && !isSelected ? 'bg-gray-200/50 dark:bg-gray-700/50' : ''}`}
                                       >
-                                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-sky-500 bg-sky-500' : 'border-gray-400 dark:border-gray-600'
+                                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-drone-primary bg-drone-primary' : 'border-gray-400 dark:border-gray-600'
                                           }`}>
                                           {isSelected && (
                                             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -3586,7 +3586,7 @@ export function FlightList({
                               type="button"
                               onClick={() => setTagFilterMode('and')}
                               className={`h-full min-w-[2.25rem] px-2 rounded-md text-[10px] font-semibold transition-colors ${tagFilterMode === 'and'
-                                ? 'bg-sky-500 text-white'
+                                ? 'bg-drone-primary text-white'
                                 : isLight
                                   ? 'text-gray-700 hover:bg-gray-200/70'
                                   : 'text-gray-300 hover:bg-gray-700/70'
@@ -3600,7 +3600,7 @@ export function FlightList({
                               type="button"
                               onClick={() => setTagFilterMode('or')}
                               className={`h-full min-w-[2.25rem] px-2 rounded-md text-[10px] font-semibold transition-colors ${tagFilterMode === 'or'
-                                ? 'bg-sky-500 text-white'
+                                ? 'bg-drone-primary text-white'
                                 : isLight
                                   ? 'text-gray-700 hover:bg-gray-200/70'
                                   : 'text-gray-300 hover:bg-gray-700/70'
@@ -3723,11 +3723,11 @@ export function FlightList({
                                           }}
                                           onMouseEnter={() => !isDisabled && setColorHighlightedIndex(index)}
                                           className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${isDisabled ? 'opacity-35 cursor-default' : isSelected
-                                            ? 'bg-sky-500/20 text-gray-800 dark:text-sky-200'
+                                            ? 'bg-drone-primary/20 text-gray-800 dark:text-drone-primary'
                                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50'
                                             } ${!isDisabled && index === colorHighlightedIndex && !isSelected ? 'bg-gray-200/50 dark:bg-gray-700/50' : ''}`}
                                         >
-                                          <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-sky-500 bg-sky-500' : 'border-gray-400 dark:border-gray-600'
+                                          <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-drone-primary bg-drone-primary' : 'border-gray-400 dark:border-gray-600'
                                             }`}>
                                             {isSelected && (
                                               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -4289,7 +4289,7 @@ export function FlightList({
                         setDraftName(flight.displayName || flight.fileName);
                         setConfirmDeleteId(null);
                       }}
-                      className="p-0.5 text-sky-400 hover:text-sky-300"
+                      className="p-0.5 text-drone-primary hover:text-drone-primary"
                       title={t('flightList.renameFlight')}
                     >
                       <PencilIcon />
@@ -4310,7 +4310,7 @@ export function FlightList({
 
               {/* Subtitle: date + duration */}
               {editingId !== flight.id && (
-                <p className="text-xs text-gray-500 mt-0.5 truncate">
+                <p className="ui-metadata text-xs text-gray-500 mt-0.5 truncate">
                   {formatDateTime(flight.startTime, dateLocale, appLanguage, hour12)}
                   {flight.durationSecs ? ` · ${formatDuration(flight.durationSecs)}` : ''}
                   {flight.totalDistance ? ` · ${formatDistance(flight.totalDistance, unitPrefs.distance, locale)}` : ''}
@@ -4372,7 +4372,7 @@ export function FlightList({
             onClick={() => handleContextRename(contextMenu.flightId)}
             className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2"
           >
-            <svg className="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-drone-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             {t('flightList.rename')}
@@ -4406,7 +4406,7 @@ export function FlightList({
             }}
             className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2"
           >
-            <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-drone-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
             </svg>
             {t('flightList.editColor', 'Edit Color')}

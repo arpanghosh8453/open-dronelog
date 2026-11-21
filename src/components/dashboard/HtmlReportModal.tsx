@@ -203,11 +203,11 @@ export function HtmlReportModal({ isOpen, onClose, onGenerate, flightCount }: Ht
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">{t('report.reportFields')}</span>
                         <div className="flex items-center gap-3 text-xs">
-                            <button onClick={selectAllGroups} className="text-sky-400 hover:text-sky-300 font-medium transition-colors">{t('report.all')}</button>
+                            <button onClick={selectAllGroups} className="text-drone-primary hover:text-drone-primary font-medium transition-colors">{t('report.all')}</button>
                             <span className="text-gray-600">/</span>
-                            <button onClick={selectNoneGroups} className="text-sky-400 hover:text-sky-300 font-medium transition-colors">{t('report.none')}</button>
+                            <button onClick={selectNoneGroups} className="text-drone-primary hover:text-drone-primary font-medium transition-colors">{t('report.none')}</button>
                             <span className="text-gray-600">/</span>
-                            <button onClick={resetAll} className="text-sky-400 hover:text-sky-300 font-medium transition-colors">{t('report.reset')}</button>
+                            <button onClick={resetAll} className="text-drone-primary hover:text-drone-primary font-medium transition-colors">{t('report.reset')}</button>
                         </div>
                     </div>
                 </div>
@@ -224,9 +224,9 @@ export function HtmlReportModal({ isOpen, onClose, onGenerate, flightCount }: Ht
                                 <div className="flex items-center justify-between px-4 py-2 bg-drone-surface border-b border-gray-700/80">
                                     <span className="text-xs font-semibold text-gray-300">{t(`report.${group.name}`)}</span>
                                     <div className="flex items-center gap-2 text-[10px]">
-                                        <button onClick={() => setGroupAll(group.name)} className="text-sky-400 hover:text-sky-300 font-medium transition-colors">{t('report.all')}</button>
+                                        <button onClick={() => setGroupAll(group.name)} className="text-drone-primary hover:text-drone-primary font-medium transition-colors">{t('report.all')}</button>
                                         <span className="text-gray-600">/</span>
-                                        <button onClick={() => setGroupNone(group.name)} className="text-sky-400 hover:text-sky-300 font-medium transition-colors">{t('report.none')}</button>
+                                        <button onClick={() => setGroupNone(group.name)} className="text-drone-primary hover:text-drone-primary font-medium transition-colors">{t('report.none')}</button>
                                     </div>
                                 </div>
 
@@ -240,8 +240,8 @@ export function HtmlReportModal({ isOpen, onClose, onGenerate, flightCount }: Ht
                                             <div
                                                 onClick={() => toggleField(field.key)}
                                                 className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${fieldConfig[field.key]
-                                                    ? 'bg-sky-500 border-sky-500'
-                                                    : 'border-gray-600 group-hover:border-sky-400'
+                                                    ? 'bg-drone-primary border-drone-primary'
+                                                    : 'border-gray-600 group-hover:border-drone-primary'
                                                     }`}
                                             >
                                                 {fieldConfig[field.key] && (
@@ -273,7 +273,7 @@ export function HtmlReportModal({ isOpen, onClose, onGenerate, flightCount }: Ht
                         onClick={handleGenerate}
                         disabled={!hasAnySelected}
                         className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 ${hasAnySelected
-                            ? 'bg-drone-primary hover:bg-sky-500 text-white shadow-md shadow-sky-500/25 hover:shadow-sky-500/40'
+                            ? 'bg-drone-primary hover:bg-drone-primary text-white shadow-md shadow-sky-500/25 hover:shadow-sky-500/40'
                             : 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
                             }`}
                     >
