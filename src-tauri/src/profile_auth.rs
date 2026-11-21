@@ -138,6 +138,17 @@ pub fn profile_is_protected(data_dir: &Path, profile: &str) -> bool {
     has_password(data_dir, profile)
 }
 
+/// Move a profile's password entry to its new name when the profile is renamed.
+pub fn rename_auth_entry(data_dir: &Path, old: &str, new: &str) -> Result<(), String> {
+    let mut map = load_auth(data_dir);
+    if let Some(hash) = map.remove(old) {
+        map.insert(new.to_string(), hash);
+        save_auth(data_dir, &map)?;
+        log::info!("Moved auth entry from profile '{}' to '{}'", old, new);
+    }
+    Ok(())
+}
+
 /// Clean up auth entry when a profile is deleted.
 pub fn remove_auth_entry(data_dir: &Path, profile: &str) {
     let mut map = load_auth(data_dir);

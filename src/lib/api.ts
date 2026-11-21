@@ -1178,6 +1178,35 @@ export async function deleteProfile(opts: DeleteProfileOptions): Promise<boolean
   return invoke('delete_profile', { name: opts.name, password: opts.password || null }) as Promise<boolean>;
 }
 
+export interface RenameProfileOptions {
+  name: string;
+  new_name: string;
+  password?: string;
+  master_password?: string;
+}
+
+/** Rename a (non-active) profile. Resolves to the new name. */
+export async function renameProfile(opts: RenameProfileOptions): Promise<string> {
+  if (isWeb) {
+    const result = await fetchJson<SwitchProfileResponse>('/profiles/rename', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: opts.name,
+        new_name: opts.new_name,
+        password: opts.password || null,
+        master_password: opts.master_password || null,
+      }),
+    });
+    return result.name;
+  }
+  const invoke = await getTauriInvoke();
+  return invoke('rename_profile', {
+    name: opts.name,
+    newName: opts.new_name,
+    password: opts.password || null,
+  }) as Promise<string>;
+}
+
 // ── Password management ──
 
 export async function setProfilePassword(

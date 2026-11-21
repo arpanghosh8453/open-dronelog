@@ -772,6 +772,8 @@
     "create": "Create",
     "cancel": "Cancel",
     "delete": "Delete profile",
+    "rename": "Rename profile",
+    "renameTitle": "Rename profile \"{{name}}\" to:",
     "confirmDelete": "Delete profile \"{{name}}\"? All flights in this profile will be permanently removed.",
     "namePlaceholder": "Profile name",
     "errorEmpty": "Profile name cannot be empty",

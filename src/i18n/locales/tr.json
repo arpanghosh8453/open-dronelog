@@ -772,6 +772,8 @@
     "create": "Oluştur",
     "cancel": "İptal",
     "delete": "Profili sil",
+    "rename": "Profili yeniden adlandır",
+    "renameTitle": "\"{{name}}\" profilinin yeni adı:",
     "confirmDelete": "\"{{name}}\" profilini silmek istiyor musunuz? Bu profildeki tüm uçuşlar kalıcı olarak silinecektir.",
     "namePlaceholder": "Profil adı",
     "errorEmpty": "Profil adı boş bırakılamaz",
