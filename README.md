@@ -38,6 +38,7 @@
 - [Features](#features)
 - [Accessing flight log files](#accessing-flight-log-files)
   - [Automated Sync Bridge](#automated-sync-windowsmac)
+  - [DJI Cloud Sync](#dji-cloud-logs-sync)
   - [Manual Log Collection](#manual-log-collection)
   - [DroneDeploy Flight Recorder Logs](#dronedeploy-flight-recorder-logs)
   - [Airdata Exports](#airdata-exports)
@@ -124,6 +125,10 @@ After installation, run it and check the tray menu (it usually gets minimizedto 
 
 > [!TIP]
 > After you set up Open Drone Log, you will have an option to pick a Sync folder from where the application (Open Drone Log) syncs files on startup for new log files. If you select the same log folder for both application, you will not have to find or copy new logs manually anymore - it syncs automatically with your Oopen Drone Log application!
+
+### DJI Cloud logs sync
+
+[Drone Cloud Sync](https://github.com/arpanghosh8453/Drone-Cloud-Sync) is an add-on application that fetches flight logs backed up in DJI Cloud directly to a local folder on your device. Set that folder as Open DroneLog's sync folder for seamless, wireless syncing. To avoid legal issues, the add-on is maintained separately and is not integrated into this application.
 
 ### Manual Log collection
 

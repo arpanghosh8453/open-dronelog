@@ -1481,10 +1481,10 @@ export function FlightImporter() {
               </button>
             )}
           </div>
-          <div className="mt-2 flex justify-center">
+          <div className="mt-2 flex gap-2 justify-center">
             <button
               onClick={() => setIsManualEntryOpen(true)}
-              className="btn-primary text-sm py-1.5 px-5 force-white"
+              className="btn-primary text-sm py-1.5 px-3 force-white"
               disabled={isImporting || isBatchProcessing || isSyncing}
               title="Add a flight manually without a log file"
             >
@@ -1495,6 +1495,17 @@ export function FlightImporter() {
                 {t('importer.manualEntry')}
               </div>
             </button>
+            <a
+              href="https://github.com/arpanghosh8453/Drone-Cloud-Sync"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary text-sm py-1.5 px-3 force-white inline-flex items-center gap-1 whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 18a4 4 0 01-.88-7.903A5 5 0 1115.9 8L16 8a5 5 0 011 9.9H7z" />
+              </svg>
+              DJI Cloud
+            </a>
           </div>
           
           {/* Sync folder status */}
