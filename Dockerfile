@@ -3,19 +3,19 @@
 #
 # Stage 1: Build Rust backend (Axum web server)
 # Stage 2: Build React frontend (Vite)
-# Stage 3: Runtime — Nginx + Axum in a single container
+# Stage 3: Python venv for custom parsers (built where pip/apt are available)
+# Stage 4: Runtime — distroless, non-root, single Axum process (API + frontend)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Stage 1: Rust backend build
 # ---------------------------------------------------------------------------
-FROM rust:1.85-bookworm AS backend-builder
+FROM rust:1.85-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 AS backend-builder
 
 # Install system deps for DuckDB bundled build
 RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
-    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -51,7 +51,7 @@ RUN touch src/main.rs src/lib.rs && \
 # ---------------------------------------------------------------------------
 # Stage 2: Frontend build
 # ---------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS frontend-builder
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
 
 WORKDIR /build
 
@@ -70,56 +70,74 @@ ENV VITE_BACKEND=web
 RUN npx vite build
 
 # ---------------------------------------------------------------------------
-# Stage 3: Runtime
+# Stage 3: Python venv for custom parser scripts
+#
+# Built on Debian 13 so the interpreter version (3.13.5) matches the
+# distroless python3-debian13 runtime image, which the venv points back to.
 # ---------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS runtime
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS python-venv
 
-
-# Install nginx and Python for custom parsers.
-RUN apt-get update && apt-get install -y \
-    nginx \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    python3-pip \
     python3-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -f /etc/nginx/sites-enabled/default
+    && rm -rf /var/lib/apt/lists/*
 
-# Install optional Python dependencies for custom parser scripts.
+# Optional Python dependencies for custom parser scripts.
 # Users can edit requirements.txt and rebuild the image.
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/parser-venv && \
-    /opt/parser-venv/bin/python -m pip install --no-cache-dir -U pip && \
-    /opt/parser-venv/bin/python -m pip install --no-cache-dir -r /app/requirements.txt
+    /opt/parser-venv/bin/python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
+    # pip is not needed at runtime
+    /opt/parser-venv/bin/python -m pip uninstall -y pip
 
-# Ensure parser commands like "python3" use the venv interpreter by default.
-ENV PATH="/opt/parser-venv/bin:${PATH}"
-
-# Copy backend binary
-COPY --from=backend-builder /build/src-tauri/target/release/open-dronelog /app/open-dronelog
-
-# Copy frontend build
-COPY --from=frontend-builder /build/dist /usr/share/nginx/html
-
-# Copy nginx config
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy entrypoint
-COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-# Create data directory
+# Data directory skeleton: distroless has no shell, so create it here and
+# copy it over with the right ownership.
 RUN mkdir -p /data/drone-logbook
+
+# ---------------------------------------------------------------------------
+# Stage 4: Runtime (distroless: no shell, no package manager)
+#
+# python3-debian13 ships glibc, libstdc++ (needed by bundled DuckDB) and
+# Python 3.13 for custom parsers. The :nonroot variant runs as UID 65532.
+# ---------------------------------------------------------------------------
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:1c32c3720dc4c7f0c7dbe998737f32c200add6511eca7cec705008be488b87d6 AS runtime
+
+# Python venv for custom parsers; make "python3" resolve to the venv interpreter
+COPY --from=python-venv /opt/parser-venv /opt/parser-venv
+ENV PATH="/opt/parser-venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Backend binary and frontend build (served by the Axum backend)
+COPY --from=backend-builder /build/src-tauri/target/release/open-dronelog /app/open-dronelog
+COPY --from=frontend-builder /build/dist /app/www
+
+# Data directory owned by the unprivileged user, created before VOLUME so new
+# volumes inherit the ownership.
+COPY --from=python-venv --chown=65532:65532 /data /data
 
 # Environment variables
 ENV DATA_DIR=/data/drone-logbook
-ENV PORT=3001
-ENV HOST=127.0.0.1
+ENV STATIC_DIR=/app/www
+ENV PORT=8080
+ENV HOST=0.0.0.0
 ENV RUST_LOG=DEBUG
 
-# Expose HTTP port
-EXPOSE 80
+# Writable HOME for parser libraries that cache under ~ (mount a tmpfs on /tmp
+# when running with a read-only root filesystem); no .pyc writes.
+ENV HOME=/tmp
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Unprivileged HTTP port (no privileges needed to bind)
+EXPOSE 8080
+
+# Run as non-root (explicit, matches the :nonroot base)
+USER 65532:65532
+
+# Probe the server over loopback; needs no shell or curl
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["/app/open-dronelog", "--healthcheck"]
 
 # Persistent data volume
 VOLUME ["/data/drone-logbook"]
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+# The base image's entrypoint is python3; run the backend instead
+ENTRYPOINT ["/app/open-dronelog"]
