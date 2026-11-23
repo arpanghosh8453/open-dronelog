@@ -83,7 +83,6 @@ interface FlightState {
   error: string | null;
   unitPrefs: UnitPreferences;
   themeMode: 'system' | 'dark' | 'light';
-  donationAcknowledged: boolean;
   supporterBadgeActive: boolean;
   allTags: string[];
   smartTagsEnabled: boolean;
@@ -126,7 +125,6 @@ interface FlightState {
   setTimeFormat: (format: '12h' | '24h') => void;
   setUnitPref: (key: keyof UnitPreferences, value: UnitSystem | SpeedUnit) => void;
   setThemeMode: (themeMode: 'system' | 'dark' | 'light') => void;
-  setDonationAcknowledged: (value: boolean) => void;
   setSupporterBadge: (active: boolean) => void;
   loadSupporterStatus: () => Promise<void>;
   checkForUpdates: () => Promise<void>;
@@ -169,6 +167,8 @@ interface FlightState {
   // Map-Chart sync state (session only, default off)
   mapSyncEnabled: boolean;
   setMapSyncEnabled: (enabled: boolean) => void;
+  chatReplayRequest: { flightId: number; elapsedMs: number } | null;
+  setChatReplayRequest: (request: { flightId: number; elapsedMs: number } | null) => void;
   mapReplayProgress: number;  // Replay progress from map (0 to 1)
   setMapReplayProgress: (progress: number) => void;
 
@@ -287,7 +287,6 @@ export const useFlightStore = create<FlightState>((set, get) => ({
       ? stored
       : 'system';
   })(),
-  donationAcknowledged: false,
   supporterBadgeActive: false,
   _flightDataCache: new Map(),
   allTags: [],
@@ -352,6 +351,8 @@ export const useFlightStore = create<FlightState>((set, get) => ({
 
   // Map-Chart sync state (session only, default off)
   mapSyncEnabled: false,
+  chatReplayRequest: null,
+  setChatReplayRequest: (chatReplayRequest) => set({ chatReplayRequest }),
   mapReplayProgress: 0,
   setMapSyncEnabled: (enabled: boolean) => set({ mapSyncEnabled: enabled }),
   setMapReplayProgress: (progress: number) => set({ mapReplayProgress: progress }),
@@ -930,31 +931,16 @@ export const useFlightStore = create<FlightState>((set, get) => ({
     set({ themeMode });
   },
 
-  setDonationAcknowledged: (value) => {
-    set({ donationAcknowledged: value });
-    // Persist to backend (fire-and-forget)
-    api.setDonationAcknowledgedApi(value).catch((err) =>
-      console.warn('Failed to persist donation acknowledged state:', err),
-    );
-  },
-
   setSupporterBadge: (active) => {
     set({ supporterBadgeActive: active });
-    if (active) {
-      // Activating badge also acknowledges donation
-      get().setDonationAcknowledged(true);
-    }
     // Note: activation is done via verifySupporterCode; removal via removeSupporterBadge.
     // This setter is kept for local state updates after the API call succeeds.
   },
 
   loadSupporterStatus: async () => {
     try {
-      const [badgeActive, donationAck] = await Promise.all([
-        api.getSupporterStatus(),
-        api.getDonationAcknowledged(),
-      ]);
-      set({ supporterBadgeActive: badgeActive, donationAcknowledged: donationAck });
+      const badgeActive = await api.getSupporterStatus();
+      set({ supporterBadgeActive: badgeActive });
     } catch (err) {
       console.warn('Failed to load supporter status from backend:', err);
     }

@@ -1,6 +1,7 @@
 pub mod airdata_parser;
 pub mod api;
 pub mod battery_pairs;
+pub mod chat;
 pub mod database;
 pub mod dronedeploy_parser;
 pub mod dronelogbook_parser;
@@ -22,14 +23,14 @@ mod tauri_app;
 #[cfg(feature = "tauri-app")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-	// Reuse the existing Tauri bootstrap so desktop and mobile share one startup path.
-	tauri_app::run();
+    // Reuse the existing Tauri bootstrap so desktop and mobile share one startup path.
+    tauri_app::run();
 }
 
+pub use airdata_parser::AirdataParser;
 pub use database::Database;
 pub use dronedeploy_parser::DroneDeployParser;
+pub use dronelogbook_parser::DroneLogbookParser;
+pub use litchi_parser::LitchiParser;
 pub use models::*;
 pub use parser::LogParser;
-pub use airdata_parser::AirdataParser;
-pub use litchi_parser::LitchiParser;
-pub use dronelogbook_parser::DroneLogbookParser;

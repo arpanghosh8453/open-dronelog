@@ -14,8 +14,8 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use tower_http::cors::{Any, CorsLayer};
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::api::DjiApi;
 use crate::database::{self, Database};
@@ -41,6 +41,17 @@ pub struct WebAppState {
 }
 
 impl WebAppState {
+    #[cfg(test)]
+    pub(crate) fn chat_test_state(data_dir: PathBuf) -> Self {
+        Self {
+            databases: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            opening: Arc::new(std::sync::Mutex::new(())),
+            data_dir,
+            sessions: Arc::new(SessionStore::new()),
+            master_password_hash: None,
+        }
+    }
+
     /// Get (or lazily open) a database connection for a given profile.
     pub fn db_for_profile(&self, profile: &str) -> Result<Arc<Database>, String> {
         // Fast path — already cached
@@ -123,38 +134,35 @@ impl FromRequestParts<WebAppState> for ProfileDb {
         state: &WebAppState,
     ) -> Result<Self, Self::Rejection> {
         // 1. If X-Session is present, validate it — this takes priority
-        let profile = if let Some(token) = parts
-            .headers
-            .get("X-Session")
-            .and_then(|v| v.to_str().ok())
-        {
-            match state.sessions.validate(token) {
-                Some(p) => p,
-                None => {
+        let profile =
+            if let Some(token) = parts.headers.get("X-Session").and_then(|v| v.to_str().ok()) {
+                match state.sessions.validate(token) {
+                    Some(p) => p,
+                    None => {
+                        return Err(err_response(
+                            StatusCode::UNAUTHORIZED,
+                            "Session expired or invalid — please re-authenticate",
+                        ))
+                    }
+                }
+            } else {
+                // 2. Fall back to X-Profile header (or server default)
+                let p = parts
+                    .headers
+                    .get("X-Profile")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| database::get_active_profile(&state.data_dir));
+
+                // 3. If this profile is password-protected, reject unauthenticated access
+                if profile_auth::profile_is_protected(&state.data_dir, &p) {
                     return Err(err_response(
                         StatusCode::UNAUTHORIZED,
-                        "Session expired or invalid — please re-authenticate",
-                    ))
+                        "This profile is password-protected — please authenticate first",
+                    ));
                 }
-            }
-        } else {
-            // 2. Fall back to X-Profile header (or server default)
-            let p = parts
-                .headers
-                .get("X-Profile")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| database::get_active_profile(&state.data_dir));
-
-            // 3. If this profile is password-protected, reject unauthenticated access
-            if profile_auth::profile_is_protected(&state.data_dir, &p) {
-                return Err(err_response(
-                    StatusCode::UNAUTHORIZED,
-                    "This profile is password-protected — please authenticate first",
-                ));
-            }
-            p
-        };
+                p
+            };
 
         let db = state
             .db_for_profile(&profile)
@@ -175,18 +183,12 @@ pub struct ErrorResponse {
 }
 
 fn err_response(status: StatusCode, msg: impl Into<String>) -> (StatusCode, Json<ErrorResponse>) {
-    (
-        status,
-        Json(ErrorResponse {
-            error: msg.into(),
-        }),
-    )
+    (status, Json(ErrorResponse { error: msg.into() }))
 }
 
 /// Compute SHA256 hash of a file
 fn compute_file_hash(path: &std::path::Path) -> Result<String, String> {
-    LogParser::calculate_file_hash(path)
-        .map_err(|e| format!("Failed to compute hash: {}", e))
+    LogParser::calculate_file_hash(path).map_err(|e| format!("Failed to compute hash: {}", e))
 }
 
 fn should_apply_sync_cooldown(config_path: &std::path::Path) -> bool {
@@ -198,11 +200,11 @@ fn should_apply_sync_cooldown(config_path: &std::path::Path) -> bool {
     key_type != "personal"
 }
 
-fn has_allowed_extension(file_name: &str, allowed_extensions: &std::collections::HashSet<String>) -> bool {
-    let ext = file_name
-        .rsplit('.')
-        .next()
-        .map(|e| e.to_ascii_lowercase());
+fn has_allowed_extension(
+    file_name: &str,
+    allowed_extensions: &std::collections::HashSet<String>,
+) -> bool {
+    let ext = file_name.rsplit('.').next().map(|e| e.to_ascii_lowercase());
     match ext {
         Some(e) if e != file_name.to_ascii_lowercase() => allowed_extensions.contains(&e),
         _ => false,
@@ -219,9 +221,9 @@ fn copy_uploaded_file_web(
     // Create the destination folder if it doesn't exist
     std::fs::create_dir_all(dest_folder)
         .map_err(|e| format!("Failed to create uploaded files folder: {}", e))?;
-    
+
     let dest_path = dest_folder.join(file_name);
-    
+
     // Compute source file hash if not provided
     let computed_hash: String;
     let src_hash = match file_hash {
@@ -231,43 +233,51 @@ fn copy_uploaded_file_web(
             &computed_hash
         }
     };
-    
+
     // If file with same name exists, check hash
     if dest_path.exists() {
         let existing_hash = compute_file_hash(&dest_path)?;
-        
+
         // If hashes match, skip (file already exists)
         if existing_hash == src_hash {
-            log::info!("File already exists with same hash, skipping: {}", file_name);
+            log::info!(
+                "File already exists with same hash, skipping: {}",
+                file_name
+            );
             return Ok(());
         }
-        
+
         // Hashes don't match - save with hash suffix
-        let stem = FsPath::new(file_name).file_stem()
+        let stem = FsPath::new(file_name)
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("file");
-        let extension = FsPath::new(file_name).extension()
+        let extension = FsPath::new(file_name)
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("");
-        
+
         let hash_suffix = &src_hash[..8.min(src_hash.len())];
         let new_name = if extension.is_empty() {
             format!("{}_{}", stem, hash_suffix)
         } else {
             format!("{}_{}.{}", stem, hash_suffix, extension)
         };
-        
+
         let new_dest_path = dest_folder.join(&new_name);
         std::fs::copy(src_path, &new_dest_path)
             .map_err(|e| format!("Failed to copy file: {}", e))?;
-        log::info!("Copied uploaded file (renamed due to hash mismatch): {} -> {}", file_name, new_name);
+        log::info!(
+            "Copied uploaded file (renamed due to hash mismatch): {} -> {}",
+            file_name,
+            new_name
+        );
     } else {
         // No existing file, just copy
-        std::fs::copy(src_path, &dest_path)
-            .map_err(|e| format!("Failed to copy file: {}", e))?;
+        std::fs::copy(src_path, &dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
         log::info!("Copied uploaded file: {}", file_name);
     }
-    
+
     Ok(())
 }
 
@@ -288,29 +298,36 @@ async fn import_log(
         .map_err(|e| err_response(StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))?
         .ok_or_else(|| err_response(StatusCode::BAD_REQUEST, "No file uploaded"))?;
 
-    let file_name = field
-        .file_name()
-        .unwrap_or("unknown.txt")
-        .to_string();
+    let file_name = field.file_name().unwrap_or("unknown.txt").to_string();
     let safe_name = FsPath::new(&file_name)
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|n| !n.trim().is_empty())
         .unwrap_or("upload.log")
         .to_string();
-    let data = field
-        .bytes()
-        .await
-        .map_err(|e| err_response(StatusCode::BAD_REQUEST, format!("Failed to read file: {}", e)))?;
+    let data = field.bytes().await.map_err(|e| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to read file: {}", e),
+        )
+    })?;
 
     // Write to a temp file so the parser can read it
     let temp_dir = std::env::temp_dir().join("drone-logbook-uploads");
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create temp dir: {}", e)))?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create temp dir: {}", e),
+        )
+    })?;
 
     let temp_path = temp_dir.join(format!("{}-{}", uuid::Uuid::new_v4(), safe_name));
-    std::fs::write(&temp_path, &data)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write temp file: {}", e)))?;
+    std::fs::write(&temp_path, &data).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write temp file: {}", e),
+        )
+    })?;
     // Release multipart payload bytes before parse/import work starts.
     drop(data);
 
@@ -330,10 +347,14 @@ async fn import_log(
     let keep_enabled = std::env::var("KEEP_UPLOADED_FILES")
         .map(|v| v.to_lowercase() == "true" || v == "1")
         .unwrap_or_else(|_| {
-            upload_config.get("keep_uploaded_files").and_then(|v| v.as_bool()).unwrap_or(false)
+            upload_config
+                .get("keep_uploaded_files")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
         });
     let default_upload_folder = pdb.default_upload_folder();
-    let upload_folder = upload_config.get("uploaded_files_path")
+    let upload_folder = upload_config
+        .get("uploaded_files_path")
         .and_then(|v| v.as_str())
         .map(|s| std::path::PathBuf::from(s))
         .unwrap_or(default_upload_folder);
@@ -341,7 +362,9 @@ async fn import_log(
     // Helper to copy uploaded file if setting is enabled
     let try_copy_file = |file_hash: Option<&str>| {
         if keep_enabled {
-            if let Err(e) = copy_uploaded_file_web(&temp_path, &upload_folder, &safe_name, file_hash) {
+            if let Err(e) =
+                copy_uploaded_file_web(&temp_path, &upload_folder, &safe_name, file_hash)
+            {
                 log::warn!("Failed to copy uploaded file: {}", e);
             }
         }
@@ -361,7 +384,10 @@ async fn import_log(
             return Ok(Json(ImportResult {
                 success: false,
                 flight_id: None,
-                message: format!("This flight log has already been imported (matches: {})", matching_flight),
+                message: format!(
+                    "This flight log has already been imported (matches: {})",
+                    matching_flight
+                ),
                 point_count: 0,
                 file_hash,
             }));
@@ -386,31 +412,52 @@ async fn import_log(
     let _ = std::fs::remove_file(&temp_path);
 
     // Check for duplicate flight based on signature (drone_serial + battery_serial + start_time)
-    if let Some(matching_flight) = pdb.db.is_duplicate_flight(
-        parse_result.metadata.drone_serial.as_deref(),
-        parse_result.metadata.battery_serial.as_deref(),
-        parse_result.metadata.start_time,
-    ).unwrap_or(None) {
-        log::info!("Skipping duplicate flight (signature match): {} - matches flight '{}' in database", file_name, matching_flight);
+    if let Some(matching_flight) = pdb
+        .db
+        .is_duplicate_flight(
+            parse_result.metadata.drone_serial.as_deref(),
+            parse_result.metadata.battery_serial.as_deref(),
+            parse_result.metadata.start_time,
+        )
+        .unwrap_or(None)
+    {
+        log::info!(
+            "Skipping duplicate flight (signature match): {} - matches flight '{}' in database",
+            file_name,
+            matching_flight
+        );
         return Ok(Json(ImportResult {
             success: false,
             flight_id: None,
-            message: format!("Duplicate flight: matches '{}' (same drone, battery, and start time)", matching_flight),
+            message: format!(
+                "Duplicate flight: matches '{}' (same drone, battery, and start time)",
+                matching_flight
+            ),
             point_count: 0,
             file_hash: parse_result.metadata.file_hash.clone(),
         }));
     }
 
     // Insert flight metadata
-    let flight_id = pdb.db
-        .insert_flight(&parse_result.metadata)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to insert flight: {}", e)))?;
+    let flight_id = pdb.db.insert_flight(&parse_result.metadata).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to insert flight: {}", e),
+        )
+    })?;
 
     // Bulk insert telemetry data
-    let point_count = match pdb.db.bulk_insert_telemetry(flight_id, &parse_result.points) {
+    let point_count = match pdb
+        .db
+        .bulk_insert_telemetry(flight_id, &parse_result.points)
+    {
         Ok(count) => count,
         Err(e) => {
-            log::error!("Failed to insert telemetry for flight {}: {}. Cleaning up.", flight_id, e);
+            log::error!(
+                "Failed to insert telemetry for flight {}: {}. Cleaning up.",
+                flight_id,
+                e
+            );
             if let Err(cleanup_err) = pdb.db.delete_flight(flight_id) {
                 log::error!("Failed to clean up flight {}: {}", flight_id, cleanup_err);
             }
@@ -468,35 +515,54 @@ async fn create_manual_flight(
 ) -> Result<Json<ImportResult>, (StatusCode, Json<ErrorResponse>)> {
     use chrono::DateTime;
 
-    log::info!("Creating manual flight entry: {} @ {}", payload.aircraft_name, payload.start_time);
+    log::info!(
+        "Creating manual flight entry: {} @ {}",
+        payload.aircraft_name,
+        payload.start_time
+    );
 
     // Validate required fields
     if payload.aircraft_name.trim().is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Aircraft name is required"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Aircraft name is required",
+        ));
     }
     if payload.drone_serial.trim().is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Drone serial is required"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Drone serial is required",
+        ));
     }
     if payload.battery_serial.trim().is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Battery serial is required"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Battery serial is required",
+        ));
     }
 
     // Parse the start time
     let parsed_start_time = DateTime::parse_from_rfc3339(&payload.start_time)
         .map(|dt| dt.with_timezone(&chrono::Utc))
-        .map_err(|e| err_response(StatusCode::BAD_REQUEST, format!("Invalid start time format: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid start time format: {}", e),
+            )
+        })?;
 
     // Calculate end time
     let end_time = parsed_start_time + chrono::Duration::seconds(payload.duration_secs as i64);
 
     // Create flight metadata
     // Use flight_title if provided, otherwise fallback to aircraft_name
-    let display_name = payload.flight_title
+    let display_name = payload
+        .flight_title
         .as_ref()
         .filter(|s| !s.trim().is_empty())
         .cloned()
         .unwrap_or_else(|| payload.aircraft_name.clone());
-    
+
     let flight_id = pdb.db.generate_flight_id();
     let metadata = crate::models::FlightMetadata {
         id: flight_id,
@@ -522,16 +588,24 @@ async fn create_manual_flight(
         rc_serial: None,
         battery_life: None,
     };
-    pdb.db
-        .insert_flight(&metadata)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to insert flight: {}", e)))?;
+    pdb.db.insert_flight(&metadata).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to insert flight: {}", e),
+        )
+    })?;
 
     // Update notes if provided
     if let Some(notes_text) = &payload.notes {
         if !notes_text.trim().is_empty() {
             pdb.db
                 .update_flight_notes(flight_id, Some(notes_text))
-                .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to add notes: {}", e)))?;
+                .map_err(|e| {
+                    err_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to add notes: {}", e),
+                    )
+                })?;
         }
     }
 
@@ -555,7 +629,7 @@ async fn create_manual_flight(
         end_battery_percent: None,
         start_battery_temp: None,
     };
-    
+
     let smart_tags = crate::parser::LogParser::generate_smart_tags(&metadata, &stats);
     if !smart_tags.is_empty() {
         if let Err(e) = pdb.db.insert_flight_tags(flight_id, &smart_tags) {
@@ -563,7 +637,10 @@ async fn create_manual_flight(
         }
     }
 
-    log::info!("Successfully created manual flight entry with ID: {}", flight_id);
+    log::info!(
+        "Successfully created manual flight entry with ID: {}",
+        flight_id
+    );
 
     Ok(Json(ImportResult {
         success: true,
@@ -578,9 +655,12 @@ async fn create_manual_flight(
 async fn get_flights(
     pdb: ProfileDb,
 ) -> Result<Json<Vec<crate::models::Flight>>, (StatusCode, Json<ErrorResponse>)> {
-    let flights = pdb.db
-        .get_all_flights()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get flights: {}", e)))?;
+    let flights = pdb.db.get_all_flights().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get flights: {}", e),
+        )
+    })?;
     Ok(Json(flights))
 }
 
@@ -595,24 +675,36 @@ async fn get_flight_data(
     pdb: ProfileDb,
     Query(params): Query<FlightDataQuery>,
 ) -> Result<Json<FlightDataResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let flight = pdb.db
+    let flight = pdb
+        .db
         .get_flight_by_id(params.flight_id)
         .map_err(|e| err_response(StatusCode::NOT_FOUND, format!("Flight not found: {}", e)))?;
 
     let known_point_count = flight.point_count.map(|c| c as i64);
 
-    let telemetry_records = pdb.db
+    let telemetry_records = pdb
+        .db
         .get_flight_telemetry(params.flight_id, params.max_points, known_point_count)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get telemetry: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get telemetry: {}", e),
+            )
+        })?;
 
     let telemetry = TelemetryData::from_records(&telemetry_records);
     let track = telemetry.extract_track(2000);
 
     // Get flight messages (tips and warnings)
-    let messages = pdb.db
+    let messages = pdb
+        .db
         .get_flight_messages(params.flight_id)
         .unwrap_or_else(|e| {
-            log::warn!("Failed to get messages for flight {}: {}", params.flight_id, e);
+            log::warn!(
+                "Failed to get messages for flight {}: {}",
+                params.flight_id,
+                e
+            );
             Vec::new()
         });
 
@@ -628,9 +720,12 @@ async fn get_flight_data(
 async fn get_overview_stats(
     pdb: ProfileDb,
 ) -> Result<Json<OverviewStats>, (StatusCode, Json<ErrorResponse>)> {
-    let stats = pdb.db
-        .get_overview_stats()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get overview stats: {}", e)))?;
+    let stats = pdb.db.get_overview_stats().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get overview stats: {}", e),
+        )
+    })?;
     Ok(Json(stats))
 }
 
@@ -644,9 +739,15 @@ async fn get_battery_full_capacity_history(
     pdb: ProfileDb,
     Query(params): Query<BatteryCapacityHistoryQuery>,
 ) -> Result<Json<Vec<(i64, String, f64)>>, (StatusCode, Json<ErrorResponse>)> {
-    let history = pdb.db
+    let history = pdb
+        .db
         .get_battery_full_capacity_history(&params.battery_serial)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get battery capacity history: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get battery capacity history: {}", e),
+            )
+        })?;
     Ok(Json(history))
 }
 
@@ -664,7 +765,12 @@ async fn delete_flight(
     pdb.db
         .delete_flight(params.flight_id)
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete flight: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to delete flight: {}", e),
+            )
+        })
 }
 
 /// DELETE /api/flights — Delete all flights
@@ -675,7 +781,12 @@ async fn delete_all_flights(
     pdb.db
         .delete_all_flights()
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete all flights: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to delete all flights: {}", e),
+            )
+        })
 }
 
 /// POST /api/flights/deduplicate — Remove duplicate flights
@@ -683,10 +794,12 @@ async fn deduplicate_flights(
     pdb: ProfileDb,
 ) -> Result<Json<usize>, (StatusCode, Json<ErrorResponse>)> {
     log::info!("Running flight deduplication");
-    pdb.db
-        .deduplicate_flights()
-        .map(Json)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to deduplicate flights: {}", e)))
+    pdb.db.deduplicate_flights().map(Json).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to deduplicate flights: {}", e),
+        )
+    })
 }
 
 /// PUT /api/flights/name — Update flight display name
@@ -702,7 +815,10 @@ async fn update_flight_name(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     let trimmed = payload.display_name.trim();
     if trimmed.is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Display name cannot be empty"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Display name cannot be empty",
+        ));
     }
 
     log::info!("Renaming flight {} to '{}'", payload.flight_id, trimmed);
@@ -710,7 +826,12 @@ async fn update_flight_name(
     pdb.db
         .update_flight_name(payload.flight_id, trimmed)
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update flight name: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update flight name: {}", e),
+            )
+        })
 }
 
 #[derive(Deserialize)]
@@ -723,17 +844,30 @@ async fn update_flight_notes(
     pdb: ProfileDb,
     Json(payload): Json<UpdateNotesPayload>,
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
-    let notes_ref = payload.notes.as_ref().map(|s| {
-        let trimmed = s.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed) }
-    }).flatten();
+    let notes_ref = payload
+        .notes
+        .as_ref()
+        .map(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .flatten();
 
     log::info!("Updating notes for flight {}", payload.flight_id);
 
     pdb.db
         .update_flight_notes(payload.flight_id, notes_ref)
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update flight notes: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update flight notes: {}", e),
+            )
+        })
 }
 
 /// PUT /api/flights/color — Update flight color label
@@ -749,22 +883,31 @@ async fn update_flight_color(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     let trimmed = payload.color.trim();
     if trimmed.is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Color cannot be empty"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Color cannot be empty",
+        ));
     }
 
-    log::info!("Updating color for flight {} to '{}'", payload.flight_id, trimmed);
+    log::info!(
+        "Updating color for flight {} to '{}'",
+        payload.flight_id,
+        trimmed
+    );
 
     pdb.db
         .update_flight_color(payload.flight_id, trimmed)
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update flight color: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update flight color: {}", e),
+            )
+        })
 }
 
 /// GET /api/has_api_key — Check if DJI API key is configured
-async fn has_api_key(
-    AxumState(state): AxumState<WebAppState>,
-    _pdb: ProfileDb,
-) -> Json<bool> {
+async fn has_api_key(AxumState(state): AxumState<WebAppState>, _pdb: ProfileDb) -> Json<bool> {
     let api = DjiApi::with_app_data_dir(state.data_dir.clone());
     Json(api.has_api_key())
 }
@@ -799,7 +942,12 @@ async fn set_api_key(
     let api = DjiApi::with_app_data_dir(state.data_dir.clone());
     api.save_api_key(&payload.api_key)
         .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save API key: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to save API key: {}", e),
+            )
+        })
 }
 
 /// DELETE /api/remove_api_key — Remove the custom API key (fall back to default)
@@ -815,9 +963,12 @@ async fn remove_api_key(
     }
 
     let api = DjiApi::with_app_data_dir(state.data_dir.clone());
-    api.remove_api_key()
-        .map(|_| Json(true))
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove API key: {}", e)))
+    api.remove_api_key().map(|_| Json(true)).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to remove API key: {}", e),
+        )
+    })
 }
 
 /// GET /api/app_data_dir — Get the app data directory path
@@ -852,29 +1003,43 @@ async fn export_backup(
     use axum::body::Body;
     use axum::response::IntoResponse;
 
-    let temp_path = std::env::temp_dir().join(format!("dji-logbook-dl-{}.db.backup", uuid::Uuid::new_v4()));
+    let temp_path =
+        std::env::temp_dir().join(format!("dji-logbook-dl-{}.db.backup", uuid::Uuid::new_v4()));
 
-    pdb.db
-        .export_backup(&temp_path)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Backup failed: {}", e)))?;
+    pdb.db.export_backup(&temp_path).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Backup failed: {}", e),
+        )
+    })?;
 
-    let file_bytes = tokio::fs::read(&temp_path)
-        .await
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read backup file: {}", e)))?;
+    let file_bytes = tokio::fs::read(&temp_path).await.map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read backup file: {}", e),
+        )
+    })?;
 
     let _ = tokio::fs::remove_file(&temp_path).await;
 
     // Generate timestamped filename
     let now = chrono::Local::now();
-    let filename = format!("{}_Open_Dronelog.db.backup", now.format("%Y-%m-%d_%H-%M-%S"));
+    let filename = format!(
+        "{}_Open_Dronelog.db.backup",
+        now.format("%Y-%m-%d_%H-%M-%S")
+    );
 
     Ok((
         [
             (axum::http::header::CONTENT_TYPE, "application/octet-stream"),
-            (axum::http::header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename).leak()),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}\"", filename).leak(),
+            ),
         ],
         Body::from(file_bytes),
-    ).into_response())
+    )
+        .into_response())
 }
 
 /// POST /api/backup/restore — Upload and restore a backup file
@@ -889,18 +1054,30 @@ async fn import_backup(
         .map_err(|e| err_response(StatusCode::BAD_REQUEST, format!("Multipart error: {}", e)))?
         .ok_or_else(|| err_response(StatusCode::BAD_REQUEST, "No file uploaded"))?;
 
-    let data = field
-        .bytes()
-        .await
-        .map_err(|e| err_response(StatusCode::BAD_REQUEST, format!("Failed to read file: {}", e)))?;
+    let data = field.bytes().await.map_err(|e| {
+        err_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to read file: {}", e),
+        )
+    })?;
 
-    let temp_path = std::env::temp_dir().join(format!("dji-logbook-restore-{}.db.backup", uuid::Uuid::new_v4()));
-    std::fs::write(&temp_path, &data)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write temp file: {}", e)))?;
+    let temp_path = std::env::temp_dir().join(format!(
+        "dji-logbook-restore-{}.db.backup",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::write(&temp_path, &data).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to write temp file: {}", e),
+        )
+    })?;
 
-    let msg = pdb.db
-        .import_backup(&temp_path)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Restore failed: {}", e)))?;
+    let msg = pdb.db.import_backup(&temp_path).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Restore failed: {}", e),
+        )
+    })?;
 
     let _ = std::fs::remove_file(&temp_path);
 
@@ -924,11 +1101,21 @@ async fn add_flight_tag(
 ) -> Result<Json<Vec<FlightTag>>, (StatusCode, Json<ErrorResponse>)> {
     pdb.db
         .add_flight_tag(payload.flight_id, &payload.tag)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to add tag: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to add tag: {}", e),
+            )
+        })?;
     pdb.db
         .get_flight_tags(payload.flight_id)
         .map(Json)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get tags: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get tags: {}", e),
+            )
+        })
 }
 
 /// POST /api/flights/tags/remove — Remove a tag from a flight
@@ -944,21 +1131,33 @@ async fn remove_flight_tag(
 ) -> Result<Json<Vec<FlightTag>>, (StatusCode, Json<ErrorResponse>)> {
     pdb.db
         .remove_flight_tag(payload.flight_id, &payload.tag)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove tag: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to remove tag: {}", e),
+            )
+        })?;
     pdb.db
         .get_flight_tags(payload.flight_id)
         .map(Json)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get tags: {}", e)))
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get tags: {}", e),
+            )
+        })
 }
 
 /// GET /api/tags — Get all unique tags
 async fn get_all_tags(
     pdb: ProfileDb,
 ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {
-    pdb.db
-        .get_all_unique_tags()
-        .map(Json)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get tags: {}", e)))
+    pdb.db.get_all_unique_tags().map(Json).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get tags: {}", e),
+        )
+    })
 }
 
 /// POST /api/tags/remove_auto — Remove all auto-generated tags from all flights
@@ -966,18 +1165,23 @@ async fn remove_all_auto_tags(
     pdb: ProfileDb,
 ) -> Result<Json<usize>, (StatusCode, Json<ErrorResponse>)> {
     log::info!("Removing all auto-generated tags");
-    pdb.db
-        .remove_all_auto_tags()
-        .map(Json)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove auto tags: {}", e)))
+    pdb.db.remove_all_auto_tags().map(Json).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to remove auto tags: {}", e),
+        )
+    })
 }
 
 /// GET /api/settings/smart_tags — Check if smart tags are enabled
-async fn get_smart_tags_enabled(
-    pdb: ProfileDb,
-) -> Json<bool> {
+async fn get_smart_tags_enabled(pdb: ProfileDb) -> Json<bool> {
     let config = crate::models::load_profile_config(&pdb.config_path());
-    Json(config.get("smart_tags_enabled").and_then(|v| v.as_bool()).unwrap_or(true))
+    Json(
+        config
+            .get("smart_tags_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
+    )
 }
 
 /// POST /api/settings/smart_tags — Set smart tags enabled
@@ -1004,16 +1208,27 @@ async fn get_enabled_tag_types(
 ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {
     let config = crate::models::load_profile_config(&pdb.config_path());
     if let Some(types) = config.get("enabled_tag_types").and_then(|v| v.as_array()) {
-        return Ok(Json(types.iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-            .collect()));
+        return Ok(Json(
+            types
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect(),
+        ));
     }
     // Default: return all tag types
     Ok(Json(vec![
-        "night_flight".to_string(), "high_speed".to_string(), "cold_battery".to_string(),
-        "heavy_load".to_string(), "low_battery".to_string(), "high_altitude".to_string(),
-        "long_distance".to_string(), "long_flight".to_string(), "short_flight".to_string(),
-        "aggressive_flying".to_string(), "no_gps".to_string(), "country".to_string(),
+        "night_flight".to_string(),
+        "high_speed".to_string(),
+        "cold_battery".to_string(),
+        "heavy_load".to_string(),
+        "low_battery".to_string(),
+        "high_altitude".to_string(),
+        "long_distance".to_string(),
+        "long_flight".to_string(),
+        "short_flight".to_string(),
+        "aggressive_flying".to_string(),
+        "no_gps".to_string(),
+        "country".to_string(),
         "continent".to_string(),
     ]))
 }
@@ -1066,10 +1281,12 @@ async fn get_setting_value(
         ));
     }
 
-    let value = pdb
-        .db
-        .get_setting(key)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read setting: {}", e)))?;
+    let value = pdb.db.get_setting(key).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read setting: {}", e),
+        )
+    })?;
 
     Ok(Json(SettingValuePayload { value }))
 }
@@ -1087,9 +1304,12 @@ async fn set_setting_value(
         ));
     }
 
-    pdb.db
-        .set_setting(key, &payload.value)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save setting: {}", e)))?;
+    pdb.db.set_setting(key, &payload.value).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save setting: {}", e),
+        )
+    })?;
 
     Ok(Json(true))
 }
@@ -1107,10 +1327,14 @@ async fn regenerate_flight_smart_tags(
     Path(flight_id): Path<i64>,
     Json(payload): Json<RegenerateTagsPayload>,
 ) -> Result<Json<String>, (StatusCode, Json<ErrorResponse>)> {
-    use crate::parser::{LogParser, calculate_stats_from_records};
+    use crate::parser::{calculate_stats_from_records, LogParser};
 
-    let flight = pdb.db.get_flight_by_id(flight_id)
-        .map_err(|e| err_response(StatusCode::NOT_FOUND, format!("Failed to get flight {}: {}", flight_id, e)))?;
+    let flight = pdb.db.get_flight_by_id(flight_id).map_err(|e| {
+        err_response(
+            StatusCode::NOT_FOUND,
+            format!("Failed to get flight {}: {}", flight_id, e),
+        )
+    })?;
 
     let metadata = crate::models::FlightMetadata::from(&flight);
 
@@ -1122,14 +1346,21 @@ async fn regenerate_flight_smart_tags(
             if let Some(ref types) = payload.enabled_tag_types {
                 tags = LogParser::filter_smart_tags(tags, types);
             }
-            pdb.db.replace_auto_tags(flight_id, &tags)
-                .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to replace tags: {}", e)))?;
+            pdb.db.replace_auto_tags(flight_id, &tags).map_err(|e| {
+                err_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to replace tags: {}", e),
+                )
+            })?;
         }
         Ok(_) => {
             let _ = pdb.db.replace_auto_tags(flight_id, &[]);
         }
         Err(e) => {
-            return Err(err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get telemetry: {}", e)));
+            return Err(err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get telemetry: {}", e),
+            ));
         }
     }
 
@@ -1140,13 +1371,17 @@ async fn regenerate_flight_smart_tags(
 async fn regenerate_smart_tags(
     pdb: ProfileDb,
 ) -> Result<Json<String>, (StatusCode, Json<ErrorResponse>)> {
-    use crate::parser::{LogParser, calculate_stats_from_records};
+    use crate::parser::{calculate_stats_from_records, LogParser};
 
     log::info!("Starting smart tag regeneration for all flights");
     let start = std::time::Instant::now();
 
-    let flight_ids = pdb.db.get_all_flight_ids()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get flight IDs: {}", e)))?;
+    let flight_ids = pdb.db.get_all_flight_ids().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get flight IDs: {}", e),
+        )
+    })?;
 
     let _total = flight_ids.len();
     let mut processed = 0usize;
@@ -1279,25 +1514,25 @@ struct RemoveSyncBlacklistParams {
 }
 
 /// GET /api/sync/config — Get the sync folder path configuration
-async fn get_sync_config(
-    _pdb: ProfileDb,
-) -> Json<SyncResponse> {
+async fn get_sync_config(_pdb: ProfileDb) -> Json<SyncResponse> {
     let sync_path = std::env::var("SYNC_LOGS_PATH").ok();
     let auto_sync = std::env::var("SYNC_INTERVAL").is_ok();
     Json(SyncResponse {
         processed: 0,
         skipped: 0,
         errors: 0,
-        message: if sync_path.is_some() { "Sync folder configured".to_string() } else { "No sync folder configured".to_string() },
+        message: if sync_path.is_some() {
+            "Sync folder configured".to_string()
+        } else {
+            "No sync folder configured".to_string()
+        },
         sync_path,
         auto_sync,
     })
 }
 
 /// GET /api/allowed_log_extensions — Get built-in + custom parser extensions
-async fn get_allowed_log_extensions(
-    pdb: ProfileDb,
-) -> Json<AllowedExtensionsResponse> {
+async fn get_allowed_log_extensions(pdb: ProfileDb) -> Json<AllowedExtensionsResponse> {
     let mut extensions = crate::plugins::get_allowed_extensions(&pdb.data_dir);
     extensions.sort();
     Json(AllowedExtensionsResponse { extensions })
@@ -1307,9 +1542,12 @@ async fn get_allowed_log_extensions(
 async fn get_sync_blacklist(
     pdb: ProfileDb,
 ) -> Result<Json<SyncBlacklistResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let hashes = pdb.db
-        .get_sync_blacklist_hashes()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get sync blacklist: {}", e)))?;
+    let hashes = pdb.db.get_sync_blacklist_hashes().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get sync blacklist: {}", e),
+        )
+    })?;
     Ok(Json(SyncBlacklistResponse { hashes }))
 }
 
@@ -1317,24 +1555,28 @@ async fn get_sync_blacklist(
 async fn get_sync_blacklist_details(
     pdb: ProfileDb,
 ) -> Result<Json<SyncBlacklistDetailsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let hashes = pdb
-        .db
-        .get_sync_blacklist_hashes()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get sync blacklist: {}", e)))?;
+    let hashes = pdb.db.get_sync_blacklist_hashes().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get sync blacklist: {}", e),
+        )
+    })?;
 
     if hashes.is_empty() {
         return Ok(Json(SyncBlacklistDetailsResponse { entries: vec![] }));
     }
 
     let hash_set: std::collections::HashSet<String> = hashes.iter().cloned().collect();
-    let mut resolved_by_hash: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut resolved_by_hash: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
 
     if let Some(sync_dir) = pdb.sync_path() {
         if sync_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&sync_dir) {
-                let allowed_extensions: std::collections::HashSet<String> = crate::plugins::get_allowed_extensions(&pdb.data_dir)
-                    .into_iter()
-                    .collect();
+                let allowed_extensions: std::collections::HashSet<String> =
+                    crate::plugins::get_allowed_extensions(&pdb.data_dir)
+                        .into_iter()
+                        .collect();
 
                 // Deterministic filename choice if multiple files happen to share one hash.
                 let mut candidates: Vec<(String, std::path::PathBuf)> = Vec::new();
@@ -1355,7 +1597,10 @@ async fn get_sync_blacklist_details(
                         continue;
                     }
 
-                    candidates.push((entry.file_name().to_string_lossy().to_string(), entry.path()));
+                    candidates.push((
+                        entry.file_name().to_string_lossy().to_string(),
+                        entry.path(),
+                    ));
                 }
 
                 candidates.sort_by(|a, b| a.0.to_ascii_lowercase().cmp(&b.0.to_ascii_lowercase()));
@@ -1398,7 +1643,12 @@ async fn add_sync_blacklist(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     pdb.db
         .add_to_sync_blacklist(&payload.file_hash)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to add sync blacklist hash: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to add sync blacklist hash: {}", e),
+            )
+        })?;
     Ok(Json(true))
 }
 
@@ -1409,7 +1659,12 @@ async fn remove_sync_blacklist(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     pdb.db
         .remove_from_sync_blacklist(&params.file_hash)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove sync blacklist hash: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to remove sync blacklist hash: {}", e),
+            )
+        })?;
     Ok(Json(true))
 }
 
@@ -1417,17 +1672,17 @@ async fn remove_sync_blacklist(
 async fn clear_sync_blacklist(
     pdb: ProfileDb,
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
-    pdb.db
-        .clear_sync_blacklist()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to clear sync blacklist: {}", e)))?;
+    pdb.db.clear_sync_blacklist().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to clear sync blacklist: {}", e),
+        )
+    })?;
     Ok(Json(true))
 }
 
 /// POST /api/sync/log_event — Write sync UI event into backend log stream
-async fn sync_log_event(
-    pdb: ProfileDb,
-    Json(payload): Json<SyncLogPayload>,
-) -> Json<bool> {
+async fn sync_log_event(pdb: ProfileDb, Json(payload): Json<SyncLogPayload>) -> Json<bool> {
     let level = payload.level.trim().to_ascii_lowercase();
     let body = if let Some(meta) = payload.metadata {
         format!("[SYNC][UI][{}] {} | {}", pdb.profile, payload.message, meta)
@@ -1488,19 +1743,23 @@ async fn get_sync_files(
     };
 
     // Get existing file hashes to filter out already-imported files
-    let existing_hashes: std::collections::HashSet<String> = pdb.db.get_all_file_hashes()
+    let existing_hashes: std::collections::HashSet<String> = pdb
+        .db
+        .get_all_file_hashes()
         .unwrap_or_default()
         .into_iter()
         .collect();
-    let blacklisted_hashes: std::collections::HashSet<String> = pdb.db
+    let blacklisted_hashes: std::collections::HashSet<String> = pdb
+        .db
         .get_sync_blacklist_hashes()
         .unwrap_or_default()
         .into_iter()
         .collect();
 
-    let allowed_extensions: std::collections::HashSet<String> = crate::plugins::get_allowed_extensions(&pdb.data_dir)
-        .into_iter()
-        .collect();
+    let allowed_extensions: std::collections::HashSet<String> =
+        crate::plugins::get_allowed_extensions(&pdb.data_dir)
+            .into_iter()
+            .collect();
 
     let mut candidate_count = 0usize;
     let mut skipped_existing = 0usize;
@@ -1576,7 +1835,10 @@ async fn sync_single_file(
 ) -> Result<Json<SyncFileResponse>, (StatusCode, Json<ErrorResponse>)> {
     let filename = payload.filename.trim();
     if filename.is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Missing filename".to_string()));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Missing filename".to_string(),
+        ));
     }
 
     let sync_dir = match pdb.sync_path() {
@@ -1594,9 +1856,14 @@ async fn sync_single_file(
 
     // Path traversal protection: ensure resolved path stays inside the sync directory
     let canonical_sync = sync_dir.canonicalize().unwrap_or_else(|_| sync_dir.clone());
-    let canonical_file = file_path.canonicalize().unwrap_or_else(|_| file_path.clone());
+    let canonical_file = file_path
+        .canonicalize()
+        .unwrap_or_else(|_| file_path.clone());
     if !canonical_file.starts_with(&canonical_sync) {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Invalid filename — path traversal detected"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Invalid filename — path traversal detected",
+        ));
     }
 
     if !file_path.exists() {
@@ -1640,11 +1907,15 @@ async fn sync_single_file(
     };
 
     // Check for duplicate flight
-    if let Some(matching_flight) = pdb.db.is_duplicate_flight(
-        parse_result.metadata.drone_serial.as_deref(),
-        parse_result.metadata.battery_serial.as_deref(),
-        parse_result.metadata.start_time,
-    ).unwrap_or(None) {
+    if let Some(matching_flight) = pdb
+        .db
+        .is_duplicate_flight(
+            parse_result.metadata.drone_serial.as_deref(),
+            parse_result.metadata.battery_serial.as_deref(),
+            parse_result.metadata.start_time,
+        )
+        .unwrap_or(None)
+    {
         return Ok(Json(SyncFileResponse {
             success: false,
             message: format!("Duplicate flight (matches '{}')", matching_flight),
@@ -1665,7 +1936,10 @@ async fn sync_single_file(
     };
 
     // Insert telemetry
-    if let Err(e) = pdb.db.bulk_insert_telemetry(flight_id, &parse_result.points) {
+    if let Err(e) = pdb
+        .db
+        .bulk_insert_telemetry(flight_id, &parse_result.points)
+    {
         let _ = pdb.db.delete_flight(flight_id);
         return Ok(Json(SyncFileResponse {
             success: false,
@@ -1739,9 +2013,10 @@ async fn sync_from_folder(
         }
     };
 
-    let allowed_extensions: std::collections::HashSet<String> = crate::plugins::get_allowed_extensions(&pdb.data_dir)
-        .into_iter()
-        .collect();
+    let allowed_extensions: std::collections::HashSet<String> =
+        crate::plugins::get_allowed_extensions(&pdb.data_dir)
+            .into_iter()
+            .collect();
 
     let log_files: Vec<PathBuf> = entries
         .filter_map(|entry| entry.ok())
@@ -1779,7 +2054,10 @@ async fn sync_from_folder(
     let apply_cooldown = should_apply_sync_cooldown(&config_path);
 
     for (index, file_path) in log_files.iter().enumerate() {
-        let file_name = file_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
 
         if let Ok(hash) = compute_file_hash(&file_path) {
             if pdb.db.is_sync_blacklisted(&hash).unwrap_or(false) {
@@ -1787,11 +2065,15 @@ async fn sync_from_folder(
                 continue;
             }
         }
-        
+
         let parse_result = match parser.parse_log(&file_path).await {
             Ok(result) => result,
             Err(crate::parser::ParserError::AlreadyImported(matching_flight)) => {
-                log::debug!("Skipping already-imported file: {} — matches flight '{}'", file_name, matching_flight);
+                log::debug!(
+                    "Skipping already-imported file: {} — matches flight '{}'",
+                    file_name,
+                    matching_flight
+                );
                 skipped += 1;
                 continue;
             }
@@ -1803,12 +2085,20 @@ async fn sync_from_folder(
         };
 
         // Check for duplicate flight
-        if let Some(matching_flight) = pdb.db.is_duplicate_flight(
-            parse_result.metadata.drone_serial.as_deref(),
-            parse_result.metadata.battery_serial.as_deref(),
-            parse_result.metadata.start_time,
-        ).unwrap_or(None) {
-            log::debug!("Skipping duplicate flight: {} — matches flight '{}'", file_name, matching_flight);
+        if let Some(matching_flight) = pdb
+            .db
+            .is_duplicate_flight(
+                parse_result.metadata.drone_serial.as_deref(),
+                parse_result.metadata.battery_serial.as_deref(),
+                parse_result.metadata.start_time,
+            )
+            .unwrap_or(None)
+        {
+            log::debug!(
+                "Skipping duplicate flight: {} — matches flight '{}'",
+                file_name,
+                matching_flight
+            );
             skipped += 1;
             continue;
         }
@@ -1824,7 +2114,10 @@ async fn sync_from_folder(
         };
 
         // Insert telemetry
-        if let Err(e) = pdb.db.bulk_insert_telemetry(flight_id, &parse_result.points) {
+        if let Err(e) = pdb
+            .db
+            .bulk_insert_telemetry(flight_id, &parse_result.points)
+        {
             log::warn!("Failed to insert telemetry for {}: {}", file_name, e);
             let _ = pdb.db.delete_flight(flight_id);
             errors += 1;
@@ -1833,7 +2126,13 @@ async fn sync_from_folder(
 
         // Run all post-import steps (smart tags, manual tags, profile tags,
         // notes, color, messages, and customization restore)
-        crate::parser::run_post_import_steps(&pdb.db, flight_id, &parse_result, &config, &pdb.profile);
+        crate::parser::run_post_import_steps(
+            &pdb.db,
+            flight_id,
+            &parse_result,
+            &config,
+            &pdb.profile,
+        );
 
         processed += 1;
         log::debug!("Synced: {}", file_name);
@@ -1876,20 +2175,29 @@ struct EquipmentNamesResponse {
 async fn get_equipment_names(
     pdb: ProfileDb,
 ) -> Result<Json<EquipmentNamesResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let (battery_list, aircraft_list) = pdb.db.get_all_equipment_names()
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get equipment names: {}", e)))?;
-    
-    let battery_names: std::collections::HashMap<String, String> = battery_list.into_iter().collect();
-    let aircraft_names: std::collections::HashMap<String, String> = aircraft_list.into_iter().collect();
-    
-    Ok(Json(EquipmentNamesResponse { battery_names, aircraft_names }))
+    let (battery_list, aircraft_list) = pdb.db.get_all_equipment_names().map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get equipment names: {}", e),
+        )
+    })?;
+
+    let battery_names: std::collections::HashMap<String, String> =
+        battery_list.into_iter().collect();
+    let aircraft_names: std::collections::HashMap<String, String> =
+        aircraft_list.into_iter().collect();
+
+    Ok(Json(EquipmentNamesResponse {
+        battery_names,
+        aircraft_names,
+    }))
 }
 
 /// Payload for setting an equipment name
 #[derive(Deserialize)]
 struct SetEquipmentNamePayload {
     serial: String,
-    equipment_type: String,  // "battery" or "aircraft"
+    equipment_type: String, // "battery" or "aircraft"
     display_name: String,
 }
 
@@ -1898,8 +2206,18 @@ async fn set_equipment_name(
     pdb: ProfileDb,
     Json(payload): Json<SetEquipmentNamePayload>,
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
-    pdb.db.set_equipment_name(&payload.serial, &payload.equipment_type, &payload.display_name)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to set equipment name: {}", e)))?;
+    pdb.db
+        .set_equipment_name(
+            &payload.serial,
+            &payload.equipment_type,
+            &payload.display_name,
+        )
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to set equipment name: {}", e),
+            )
+        })?;
     Ok(Json(true))
 }
 
@@ -1915,23 +2233,22 @@ struct ProfileInfo {
     has_password: bool,
 }
 
-async fn list_profiles(
-    AxumState(state): AxumState<WebAppState>,
-) -> Json<Vec<ProfileInfo>> {
+async fn list_profiles(AxumState(state): AxumState<WebAppState>) -> Json<Vec<ProfileInfo>> {
     let names = database::list_profiles(&state.data_dir);
     let infos: Vec<ProfileInfo> = names
         .into_iter()
         .map(|name| {
             let has_pw = profile_auth::has_password(&state.data_dir, &name);
-            ProfileInfo { name, has_password: has_pw }
+            ProfileInfo {
+                name,
+                has_password: has_pw,
+            }
         })
         .collect();
     Json(infos)
 }
 
-async fn get_active_profile(
-    AxumState(state): AxumState<WebAppState>,
-) -> Json<String> {
+async fn get_active_profile(AxumState(state): AxumState<WebAppState>) -> Json<String> {
     Json(database::get_active_profile(&state.data_dir))
 }
 
@@ -1974,11 +2291,20 @@ async fn switch_profile(
             match &payload.master_password {
                 Some(mp) if profile_auth::verify_password(mp, hash) => { /* ok */ }
                 Some(_) => {
-                    log::warn!("Failed master password attempt for profile creation '{}'", profile);
-                    return Err(err_response(StatusCode::FORBIDDEN, "Invalid master password"));
+                    log::warn!(
+                        "Failed master password attempt for profile creation '{}'",
+                        profile
+                    );
+                    return Err(err_response(
+                        StatusCode::FORBIDDEN,
+                        "Invalid master password",
+                    ));
                 }
                 None => {
-                    return Err(err_response(StatusCode::FORBIDDEN, "Master password is required to create profiles"));
+                    return Err(err_response(
+                        StatusCode::FORBIDDEN,
+                        "Master password is required to create profiles",
+                    ));
                 }
             }
         }
@@ -1986,7 +2312,10 @@ async fn switch_profile(
 
     // If this is a create request, reject if profile already exists
     if payload.create && database::profile_exists(&state.data_dir, &profile) {
-        return Err(err_response(StatusCode::CONFLICT, format!("Profile '{}' already exists", profile)));
+        return Err(err_response(
+            StatusCode::CONFLICT,
+            format!("Profile '{}' already exists", profile),
+        ));
     }
 
     // ── Lockout check ──
@@ -2001,16 +2330,24 @@ async fn switch_profile(
     if !payload.create && profile_auth::profile_is_protected(&state.data_dir, &profile) {
         match &payload.password {
             Some(pw) => {
-                if let Err(msg) = profile_auth::verify_profile_password(&state.data_dir, &profile, pw) {
+                if let Err(msg) =
+                    profile_auth::verify_profile_password(&state.data_dir, &profile, pw)
+                {
                     let locked = state.sessions.record_failure(&profile);
                     if locked {
-                        log::warn!("Profile '{}' locked out after too many failed attempts", profile);
+                        log::warn!(
+                            "Profile '{}' locked out after too many failed attempts",
+                            profile
+                        );
                     }
                     return Err(err_response(StatusCode::UNAUTHORIZED, msg));
                 }
             }
             None => {
-                return Err(err_response(StatusCode::UNAUTHORIZED, "Password is required for this profile"));
+                return Err(err_response(
+                    StatusCode::UNAUTHORIZED,
+                    "Password is required for this profile",
+                ));
             }
         }
     }
@@ -2018,12 +2355,20 @@ async fn switch_profile(
     log::info!("Ensuring profile '{}' exists", profile);
 
     // Open (or create) the target database — this caches it in the pool
-    state.db_for_profile(&profile)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open profile '{}': {}", profile, e)))?;
+    state.db_for_profile(&profile).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to open profile '{}': {}", profile, e),
+        )
+    })?;
 
     // Persist as the server-default active profile
-    database::set_active_profile(&state.data_dir, &profile)
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to persist profile: {}", e)))?;
+    database::set_active_profile(&state.data_dir, &profile).map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to persist profile: {}", e),
+        )
+    })?;
 
     // ── Set password on newly created profile (if provided) ──
     if payload.create {
@@ -2043,7 +2388,10 @@ async fn switch_profile(
     };
 
     log::info!("Profile '{}' ready", profile);
-    Ok(Json(SwitchProfileResponse { name: profile, session }))
+    Ok(Json(SwitchProfileResponse {
+        name: profile,
+        session,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -2060,7 +2408,10 @@ async fn delete_profile_endpoint(
     let profile = params.name.trim().to_string();
 
     if profile == "default" {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Cannot delete the default profile"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Cannot delete the default profile",
+        ));
     }
 
     // ── Master password gate ──
@@ -2068,11 +2419,20 @@ async fn delete_profile_endpoint(
         match &params.master_password {
             Some(mp) if profile_auth::verify_password(mp, hash) => { /* ok */ }
             Some(_) => {
-                log::warn!("Failed master password attempt for profile deletion '{}'", profile);
-                return Err(err_response(StatusCode::FORBIDDEN, "Invalid master password"));
+                log::warn!(
+                    "Failed master password attempt for profile deletion '{}'",
+                    profile
+                );
+                return Err(err_response(
+                    StatusCode::FORBIDDEN,
+                    "Invalid master password",
+                ));
             }
             None => {
-                return Err(err_response(StatusCode::FORBIDDEN, "Master password is required to delete profiles"));
+                return Err(err_response(
+                    StatusCode::FORBIDDEN,
+                    "Master password is required to delete profiles",
+                ));
             }
         }
     }
@@ -2085,14 +2445,20 @@ async fn delete_profile_endpoint(
                     .map_err(|e| err_response(StatusCode::UNAUTHORIZED, e))?;
             }
             None => {
-                return Err(err_response(StatusCode::UNAUTHORIZED, "Password is required to delete this profile"));
+                return Err(err_response(
+                    StatusCode::UNAUTHORIZED,
+                    "Password is required to delete this profile",
+                ));
             }
         }
     }
 
     let active = database::get_active_profile(&state.data_dir);
     if active == profile {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Cannot delete the currently active profile. Switch to a different profile first."));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Cannot delete the currently active profile. Switch to a different profile first.",
+        ));
     }
 
     // Evict cached connection before deleting the file
@@ -2133,7 +2499,11 @@ async fn set_profile_password(
 
     // Verify caller identity: either session token or current password
     let authenticated = if let Some(ref token) = payload.session {
-        state.sessions.validate(token).map(|p| p == profile).unwrap_or(false)
+        state
+            .sessions
+            .validate(token)
+            .map(|p| p == profile)
+            .unwrap_or(false)
     } else {
         false
     };
@@ -2146,7 +2516,12 @@ async fn set_profile_password(
         // Not authenticated via session — must provide current password
         match &payload.current_password {
             Some(pw) => Some(pw.as_str()),
-            None => return Err(err_response(StatusCode::UNAUTHORIZED, "Current password is required")),
+            None => {
+                return Err(err_response(
+                    StatusCode::UNAUTHORIZED,
+                    "Current password is required",
+                ))
+            }
         }
     } else {
         None
@@ -2187,9 +2562,7 @@ async fn remove_profile_password(
 
 /// GET /api/profiles/has_master_password — Check if PROFILE_CREATION_PASS is set.
 /// The frontend uses this to decide whether to show the master password input.
-async fn has_master_password(
-    AxumState(state): AxumState<WebAppState>,
-) -> Json<bool> {
+async fn has_master_password(AxumState(state): AxumState<WebAppState>) -> Json<bool> {
     Json(state.master_password_hash.is_some())
 }
 
@@ -2210,7 +2583,12 @@ const MANAGER_LOCKOUT_KEY: &str = "manager overview";
 
 fn manager_overview_flag() -> bool {
     std::env::var("MANAGER_OVERVIEW")
-        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -2219,9 +2597,7 @@ fn manager_overview_enabled(state: &WebAppState) -> bool {
 }
 
 /// GET /api/manager/enabled — whether the manager overview can be opened.
-async fn manager_overview_status(
-    AxumState(state): AxumState<WebAppState>,
-) -> Json<bool> {
+async fn manager_overview_status(AxumState(state): AxumState<WebAppState>) -> Json<bool> {
     Json(manager_overview_enabled(&state))
 }
 
@@ -2302,7 +2678,10 @@ async fn manager_overview(
     Json(payload): Json<ManagerOverviewPayload>,
 ) -> Result<Json<Vec<ManagerProfileSummary>>, (StatusCode, Json<ErrorResponse>)> {
     if !manager_overview_enabled(&state) {
-        return Err(err_response(StatusCode::NOT_FOUND, "The manager overview is not enabled on this server"));
+        return Err(err_response(
+            StatusCode::NOT_FOUND,
+            "The manager overview is not enabled on this server",
+        ));
     }
     if state.sessions.is_locked_out(MANAGER_LOCKOUT_KEY) {
         return Err(err_response(
@@ -2316,7 +2695,10 @@ async fn manager_overview(
             log::warn!("Manager overview locked out after too many failed attempts");
         }
         // 403, not 401: a 401 makes the web client drop the profile session.
-        return Err(err_response(StatusCode::FORBIDDEN, "Invalid master password"));
+        return Err(err_response(
+            StatusCode::FORBIDDEN,
+            "Invalid master password",
+        ));
     }
 
     let summaries = tokio::task::spawn_blocking(move || {
@@ -2326,7 +2708,12 @@ async fn manager_overview(
             .collect::<Vec<_>>()
     })
     .await
-    .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Manager overview failed: {}", e)))?;
+    .map_err(|e| {
+        err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Manager overview failed: {}", e),
+        )
+    })?;
 
     Ok(Json(summaries))
 }
@@ -2336,8 +2723,7 @@ async fn manager_overview(
 // ============================================================================
 
 /// The SHA-256 hash of the valid supporter code.
-const SUPPORTER_HASH: &str =
-    "5978f3e898c83b40c90017c88b8048f80a5acfd020bbd073af794e710603067d";
+const SUPPORTER_HASH: &str = "5978f3e898c83b40c90017c88b8048f80a5acfd020bbd073af794e710603067d";
 
 #[derive(Deserialize)]
 struct VerifySupporterPayload {
@@ -2349,11 +2735,14 @@ async fn verify_supporter_code(
     pdb: ProfileDb,
     Json(payload): Json<VerifySupporterPayload>,
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     let trimmed = payload.code.trim().to_string();
     if trimmed.is_empty() {
-        return Err(err_response(StatusCode::BAD_REQUEST, "Code must not be empty"));
+        return Err(err_response(
+            StatusCode::BAD_REQUEST,
+            "Code must not be empty",
+        ));
     }
 
     let mut hasher = Sha256::new();
@@ -2367,23 +2756,25 @@ async fn verify_supporter_code(
 
     pdb.db
         .set_setting("supporter_badge_active", "true")
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save supporter state: {}", e)))?;
-    pdb.db
-        .set_setting("donation_acknowledged", "true")
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save donation state: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to save supporter state: {}", e),
+            )
+        })?;
 
     Ok(Json(true))
 }
 
 /// GET /api/supporter/status — Read the supporter badge state.
-async fn get_supporter_status(
-    pdb: ProfileDb,
-) -> Json<bool> {
-    let active = pdb.db
+async fn get_supporter_status(pdb: ProfileDb) -> Json<bool> {
+    let active = pdb
+        .db
         .get_setting("supporter_badge_active")
         .ok()
         .flatten()
-        .as_deref() == Some("true");
+        .as_deref()
+        == Some("true");
     Json(active)
 }
 
@@ -2393,36 +2784,13 @@ async fn remove_supporter_badge(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     pdb.db
         .set_setting("supporter_badge_active", "false")
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to remove supporter state: {}", e)))?;
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to remove supporter state: {}", e),
+            )
+        })?;
     Ok(Json(true))
-}
-
-/// GET /api/supporter/donation — Read the donation-acknowledged flag.
-async fn get_donation_acknowledged(
-    pdb: ProfileDb,
-) -> Json<bool> {
-    let ack = pdb.db
-        .get_setting("donation_acknowledged")
-        .ok()
-        .flatten()
-        .as_deref() == Some("true");
-    Json(ack)
-}
-
-#[derive(Deserialize)]
-struct DonationAckPayload {
-    acknowledged: bool,
-}
-
-/// POST /api/supporter/donation — Set the donation-acknowledged flag.
-async fn set_donation_acknowledged(
-    pdb: ProfileDb,
-    Json(payload): Json<DonationAckPayload>,
-) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
-    pdb.db
-        .set_setting("donation_acknowledged", if payload.acknowledged { "true" } else { "false" })
-        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save donation state: {}", e)))?;
-    Ok(Json(payload.acknowledged))
 }
 
 // ============================================================================
@@ -2442,7 +2810,10 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/flights", get(get_flights))
         .route("/api/flight_data", get(get_flight_data))
         .route("/api/overview", get(get_overview_stats))
-        .route("/api/battery_capacity_history", get(get_battery_full_capacity_history))
+        .route(
+            "/api/battery_capacity_history",
+            get(get_battery_full_capacity_history),
+        )
         .route("/api/flights/delete", delete(delete_flight))
         .route("/api/flights/delete_all", delete(delete_all_flights))
         .route("/api/flights/deduplicate", post(deduplicate_flights))
@@ -2455,12 +2826,21 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/tags/remove_auto", post(remove_all_auto_tags))
         .route("/api/settings/smart_tags", get(get_smart_tags_enabled))
         .route("/api/settings/smart_tags", post(set_smart_tags_enabled))
-        .route("/api/settings/enabled_tag_types", get(get_enabled_tag_types))
-        .route("/api/settings/enabled_tag_types", post(set_enabled_tag_types))
+        .route(
+            "/api/settings/enabled_tag_types",
+            get(get_enabled_tag_types),
+        )
+        .route(
+            "/api/settings/enabled_tag_types",
+            post(set_enabled_tag_types),
+        )
         .route("/api/settings/value", get(get_setting_value))
         .route("/api/settings/value", post(set_setting_value))
         .route("/api/regenerate_smart_tags", post(regenerate_smart_tags))
-        .route("/api/regenerate_flight_smart_tags/:id", post(regenerate_flight_smart_tags))
+        .route(
+            "/api/regenerate_flight_smart_tags/:id",
+            post(regenerate_flight_smart_tags),
+        )
         .route("/api/has_api_key", get(has_api_key))
         .route("/api/api_key_type", get(get_api_key_type))
         .route("/api/set_api_key", post(set_api_key))
@@ -2468,12 +2848,23 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/app_data_dir", get(get_app_data_dir))
         .route("/api/battery_pairs", get(get_battery_pairs))
         .route("/api/app_log_dir", get(get_app_log_dir))
-        .route("/api/allowed_log_extensions", get(get_allowed_log_extensions))
+        .route(
+            "/api/allowed_log_extensions",
+            get(get_allowed_log_extensions),
+        )
         .route("/api/backup", get(export_backup))
         .route("/api/backup/restore", post(import_backup))
         .route("/api/sync/config", get(get_sync_config))
-        .route("/api/sync/blacklist", get(get_sync_blacklist).post(add_sync_blacklist).delete(remove_sync_blacklist))
-        .route("/api/sync/blacklist/details", get(get_sync_blacklist_details))
+        .route(
+            "/api/sync/blacklist",
+            get(get_sync_blacklist)
+                .post(add_sync_blacklist)
+                .delete(remove_sync_blacklist),
+        )
+        .route(
+            "/api/sync/blacklist/details",
+            get(get_sync_blacklist_details),
+        )
         .route("/api/sync/blacklist/all", delete(clear_sync_blacklist))
         .route("/api/sync/log_event", post(sync_log_event))
         .route("/api/sync/files", get(get_sync_files))
@@ -2486,15 +2877,20 @@ pub fn build_router(state: WebAppState) -> Router {
         .route("/api/profiles/switch", post(switch_profile))
         .route("/api/profiles/delete", post(delete_profile_endpoint))
         .route("/api/profiles/set_password", post(set_profile_password))
-        .route("/api/profiles/remove_password", post(remove_profile_password))
-        .route("/api/profiles/has_master_password", get(has_master_password))
+        .route(
+            "/api/profiles/remove_password",
+            post(remove_profile_password),
+        )
+        .route(
+            "/api/profiles/has_master_password",
+            get(has_master_password),
+        )
         .route("/api/manager/enabled", get(manager_overview_status))
         .route("/api/manager/overview", post(manager_overview))
         .route("/api/supporter/verify", post(verify_supporter_code))
         .route("/api/supporter/status", get(get_supporter_status))
         .route("/api/supporter/remove", post(remove_supporter_badge))
-        .route("/api/supporter/donation", get(get_donation_acknowledged))
-        .route("/api/supporter/donation", post(set_donation_acknowledged))
+        .merge(crate::chat::web::router())
         .layer(cors)
         .layer(DefaultBodyLimit::max(250 * 1024 * 1024)) // 250 MB
         .with_state(state)
@@ -2518,7 +2914,9 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
                 log::info!(
                     "DEFAULT_PROFILE_PASSWORD is empty and no existing default profile password was found; default profile remains without a password"
                 );
-            } else if let Err(e) = profile_auth::set_password(&data_dir, "default", &default_pw, None) {
+            } else if let Err(e) =
+                profile_auth::set_password(&data_dir, "default", &default_pw, None)
+            {
                 log::warn!(
                     "Failed to set default profile password from DEFAULT_PROFILE_PASSWORD: {}",
                     e
@@ -2532,7 +2930,9 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
             std::env::remove_var("DEFAULT_PROFILE_PASSWORD");
         }
         Err(_) => {
-            log::debug!("DEFAULT_PROFILE_PASSWORD not set; leaving default profile password unchanged");
+            log::debug!(
+                "DEFAULT_PROFILE_PASSWORD not set; leaving default profile password unchanged"
+            );
         }
     }
 
@@ -2544,15 +2944,18 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
 
     crate::plugins::log_plugin_registration(&data_dir);
     let allowed_extensions = crate::plugins::get_allowed_extensions(&data_dir);
-    log::info!("Allowed import extensions at startup: {:?}", allowed_extensions);
+    log::info!(
+        "Allowed import extensions at startup: {:?}",
+        allowed_extensions
+    );
 
     let mut initial_pool = HashMap::new();
     initial_pool.insert(profile, Arc::new(db));
     // ── Hash the master password at startup, then clear the env var ──
     let master_password_hash = match std::env::var("PROFILE_CREATION_PASS") {
         Ok(val) if !val.is_empty() => {
-            let hash = profile_auth::hash_password(&val)
-                .expect("Failed to hash PROFILE_CREATION_PASS");
+            let hash =
+                profile_auth::hash_password(&val).expect("Failed to hash PROFILE_CREATION_PASS");
             // Remove plaintext from process environment
             std::env::remove_var("PROFILE_CREATION_PASS");
             log::info!("Master password (PROFILE_CREATION_PASS) hashed and env var cleared");
@@ -2581,9 +2984,13 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
         std::env::var("SYNC_LOGS_PATH"),
         std::env::var("SYNC_INTERVAL"),
     ) {
-        log::info!("Scheduled sync enabled: path={}, interval={}", sync_path, sync_interval);
+        log::info!(
+            "Scheduled sync enabled: path={}, interval={}",
+            sync_path,
+            sync_interval
+        );
         let scheduler_state = state.clone();
-        
+
         tokio::spawn(async move {
             if let Err(e) = start_sync_scheduler(scheduler_state, &sync_interval).await {
                 log::error!("Failed to start sync scheduler: {}", e);
@@ -2608,20 +3015,24 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
 }
 
 /// Start the cron scheduler for automatic folder sync
-async fn start_sync_scheduler(state: WebAppState, cron_expr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn start_sync_scheduler(
+    state: WebAppState,
+    cron_expr: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let sched = JobScheduler::new().await?;
-    
+
     // Validate cron expression
-    let cron_schedule = cron_expr.parse::<cron::Schedule>()
+    let cron_schedule = cron_expr
+        .parse::<cron::Schedule>()
         .map_err(|e| format!("Invalid cron expression '{}': {}", cron_expr, e))?;
-    
+
     // Log next few scheduled times for debugging
     let upcoming: Vec<_> = cron_schedule.upcoming(chrono::Utc).take(3).collect();
     log::info!("Next scheduled sync times: {:?}", upcoming);
-    
+
     let state_clone = state.clone();
     let cron_expr_owned = cron_expr.to_string();
-    
+
     let job = Job::new_async(cron_expr_owned.as_str(), move |_uuid, _lock| {
         let state = state_clone.clone();
         Box::pin(async move {
@@ -2639,12 +3050,12 @@ async fn start_sync_scheduler(state: WebAppState, cron_expr: &str) -> Result<(),
             }
         })
     })?;
-    
+
     sched.add(job).await?;
     sched.start().await?;
-    
+
     log::info!("Sync scheduler started with cron expression: {}", cron_expr);
-    
+
     // Keep the scheduler running
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
@@ -2654,14 +3065,18 @@ async fn start_sync_scheduler(state: WebAppState, cron_expr: &str) -> Result<(),
 /// Run the folder sync operation for ALL profiles (called by scheduler).
 /// Each profile syncs from its own subfolder: base for "default", base/{profile} for others.
 async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize), String> {
-    let _base_sync = std::env::var("SYNC_LOGS_PATH")
-        .map_err(|_| "SYNC_LOGS_PATH not configured".to_string())?;
+    let _base_sync =
+        std::env::var("SYNC_LOGS_PATH").map_err(|_| "SYNC_LOGS_PATH not configured".to_string())?;
 
     let profiles = database::list_profiles(&state.data_dir);
-    log::info!("[SYNC][SCHEDULED] Scheduled sync run started: profiles={}.", profiles.len());
-    let allowed_extensions: std::collections::HashSet<String> = crate::plugins::get_allowed_extensions(&state.data_dir)
-        .into_iter()
-        .collect();
+    log::info!(
+        "[SYNC][SCHEDULED] Scheduled sync run started: profiles={}.",
+        profiles.len()
+    );
+    let allowed_extensions: std::collections::HashSet<String> =
+        crate::plugins::get_allowed_extensions(&state.data_dir)
+            .into_iter()
+            .collect();
     let mut total_processed = 0usize;
     let mut total_skipped = 0usize;
     let mut total_errors = 0usize;
@@ -2680,7 +3095,12 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
         let entries = match std::fs::read_dir(&sync_dir) {
             Ok(e) => e,
             Err(e) => {
-                log::warn!("Scheduled sync: Failed to read {} for profile '{}': {}", sync_dir.display(), profile, e);
+                log::warn!(
+                    "Scheduled sync: Failed to read {} for profile '{}': {}",
+                    sync_dir.display(),
+                    profile,
+                    e
+                );
                 total_errors += 1;
                 continue;
             }
@@ -2701,7 +3121,11 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
             .collect();
 
         if log_files.is_empty() {
-            log::debug!("[SYNC][SCHEDULED][{}] no files with allowed extensions in {}", profile, sync_dir.display());
+            log::debug!(
+                "[SYNC][SCHEDULED][{}] no files with allowed extensions in {}",
+                profile,
+                sync_dir.display()
+            );
             continue;
         }
 
@@ -2709,7 +3133,11 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
         let db = match state.db_for_profile(profile) {
             Ok(d) => d,
             Err(e) => {
-                log::warn!("Scheduled sync: Failed to open DB for profile '{}': {}", profile, e);
+                log::warn!(
+                    "Scheduled sync: Failed to open DB for profile '{}': {}",
+                    profile,
+                    e
+                );
                 total_errors += 1;
                 continue;
             }
@@ -2782,7 +3210,10 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
         let apply_cooldown = should_apply_sync_cooldown(&config_path);
 
         for (index, file_path) in new_log_files.iter().enumerate() {
-            let file_name = file_path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let file_name = file_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
 
             let parse_result = match parser.parse_log(file_path).await {
                 Ok(result) => result,
@@ -2791,18 +3222,27 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
                     continue;
                 }
                 Err(e) => {
-                    log::warn!("[SYNC][SCHEDULED][{}] Failed to parse {}: {}", profile, file_name, e);
+                    log::warn!(
+                        "[SYNC][SCHEDULED][{}] Failed to parse {}: {}",
+                        profile,
+                        file_name,
+                        e
+                    );
                     total_errors += 1;
                     continue;
                 }
             };
 
             // Check for duplicate flight
-            if db.is_duplicate_flight(
-                parse_result.metadata.drone_serial.as_deref(),
-                parse_result.metadata.battery_serial.as_deref(),
-                parse_result.metadata.start_time,
-            ).unwrap_or(None).is_some() {
+            if db
+                .is_duplicate_flight(
+                    parse_result.metadata.drone_serial.as_deref(),
+                    parse_result.metadata.battery_serial.as_deref(),
+                    parse_result.metadata.start_time,
+                )
+                .unwrap_or(None)
+                .is_some()
+            {
                 total_skipped += 1;
                 continue;
             }
@@ -2811,7 +3251,12 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
             let flight_id = match db.insert_flight(&parse_result.metadata) {
                 Ok(id) => id,
                 Err(e) => {
-                    log::warn!("[SYNC][SCHEDULED][{}] Failed to insert flight from {}: {}", profile, file_name, e);
+                    log::warn!(
+                        "[SYNC][SCHEDULED][{}] Failed to insert flight from {}: {}",
+                        profile,
+                        file_name,
+                        e
+                    );
                     total_errors += 1;
                     continue;
                 }
@@ -2819,7 +3264,12 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
 
             // Insert telemetry
             if let Err(e) = db.bulk_insert_telemetry(flight_id, &parse_result.points) {
-                log::warn!("[SYNC][SCHEDULED][{}] Failed to insert telemetry for {}: {}", profile, file_name, e);
+                log::warn!(
+                    "[SYNC][SCHEDULED][{}] Failed to insert telemetry for {}: {}",
+                    profile,
+                    file_name,
+                    e
+                );
                 let _ = db.delete_flight(flight_id);
                 total_errors += 1;
                 continue;

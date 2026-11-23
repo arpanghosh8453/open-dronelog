@@ -237,10 +237,7 @@ impl<'a> AirdataParser<'a> {
     /// or DroneLogbook exports: `time(millisecond)`, `datetime(utc)`,
     /// `flycstate`, `height_above_takeoff`.
     pub fn is_airdata_csv(path: &Path) -> bool {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if !ext.eq_ignore_ascii_case("csv") {
             return false;
         }
@@ -402,7 +399,8 @@ impl<'a> AirdataParser<'a> {
     // ------------------------------------------------------------------
 
     fn parse_row(col_map: &ColumnMap, row: &[&str]) -> TelemetryPoint {
-        let get_any_f64_raw = |fields: &[&str]| fields.iter().find_map(|f| col_map.get_f64_raw(row, f));
+        let get_any_f64_raw =
+            |fields: &[&str]| fields.iter().find_map(|f| col_map.get_f64_raw(row, f));
 
         // Timestamp: use time(millisecond) column directly (no unit conversion)
         let timestamp_ms = col_map
@@ -414,37 +412,36 @@ impl<'a> AirdataParser<'a> {
         //           (relative altitude above takeoff point, like DJI logs).
         //           altitude_above_sealevel goes into altitude_abs.
         let alt_above_takeoff = col_map.get_f64(row, "height_above_takeoff");
-        let alt_above_sea = col_map.get_f64(row, "altitude_above_sealevel")
+        let alt_above_sea = col_map
+            .get_f64(row, "altitude_above_sealevel")
             .or_else(|| col_map.get_f64(row, "altitude"));
         let height_sonar = col_map.get_f64(row, "height_sonar");
 
         // RC inputs – Airdata provides both raw (0-2048 center 1024) and
         // percent (-100 to +100) columns. Prefer percent.
         let rc_elevator = col_map
-            .get_f64_raw(row, "rc_elevator")  // try "rc_elevator(percent)" first
+            .get_f64_raw(row, "rc_elevator") // try "rc_elevator(percent)" first
             .or_else(|| {
                 // Fallback: normalize raw 0-2048 range with 1024 center
-                col_map.get_f64_raw(row, "rc_elevator")
+                col_map
+                    .get_f64_raw(row, "rc_elevator")
                     .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
             });
-        let rc_aileron = col_map
-            .get_f64_raw(row, "rc_aileron")
-            .or_else(|| {
-                col_map.get_f64_raw(row, "rc_aileron")
-                    .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
-            });
-        let rc_throttle = col_map
-            .get_f64_raw(row, "rc_throttle")
-            .or_else(|| {
-                col_map.get_f64_raw(row, "rc_throttle")
-                    .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
-            });
-        let rc_rudder = col_map
-            .get_f64_raw(row, "rc_rudder")
-            .or_else(|| {
-                col_map.get_f64_raw(row, "rc_rudder")
-                    .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
-            });
+        let rc_aileron = col_map.get_f64_raw(row, "rc_aileron").or_else(|| {
+            col_map
+                .get_f64_raw(row, "rc_aileron")
+                .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
+        });
+        let rc_throttle = col_map.get_f64_raw(row, "rc_throttle").or_else(|| {
+            col_map
+                .get_f64_raw(row, "rc_throttle")
+                .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
+        });
+        let rc_rudder = col_map.get_f64_raw(row, "rc_rudder").or_else(|| {
+            col_map
+                .get_f64_raw(row, "rc_rudder")
+                .map(|v| ((v - 1024.0) / 1024.0) * 100.0)
+        });
 
         // Cell voltages – Airdata names them voltageCell1 .. voltageCell6
         let mut cells: Vec<f64> = Vec::new();
@@ -465,31 +462,48 @@ impl<'a> AirdataParser<'a> {
             latitude: col_map.get_f64_raw(row, "latitude"),
             longitude: col_map.get_f64_raw(row, "longitude"),
             altitude: alt_above_takeoff,
-            height: col_map.get_f64(row, "height_above_ground_at_drone_location")
+            height: col_map
+                .get_f64(row, "height_above_ground_at_drone_location")
                 .or(height_sonar),
             vps_height: height_sonar,
             altitude_abs: alt_above_sea,
 
             // Velocity – speed and per-axis speeds
             speed: col_map.get_f64(row, "speed"),
-            velocity_x: col_map.get_f64(row, "xspeed")
+            velocity_x: col_map
+                .get_f64(row, "xspeed")
                 .or_else(|| col_map.get_f64(row, " xspeed")),
-            velocity_y: col_map.get_f64(row, "yspeed")
+            velocity_y: col_map
+                .get_f64(row, "yspeed")
                 .or_else(|| col_map.get_f64(row, " yspeed")),
-            velocity_z: col_map.get_f64(row, "zspeed")
+            velocity_z: col_map
+                .get_f64(row, "zspeed")
                 .or_else(|| col_map.get_f64(row, " zspeed")),
 
             // Orientation
-            pitch: col_map.get_f64_raw(row, "pitch")
+            pitch: col_map
+                .get_f64_raw(row, "pitch")
                 .or_else(|| col_map.get_f64_raw(row, " pitch")),
-            roll: col_map.get_f64_raw(row, "roll")
+            roll: col_map
+                .get_f64_raw(row, "roll")
                 .or_else(|| col_map.get_f64_raw(row, " roll")),
-            yaw: col_map.get_f64_raw(row, "compass_heading")
+            yaw: col_map
+                .get_f64_raw(row, "compass_heading")
                 .or_else(|| col_map.get_f64_raw(row, " compass_heading")),
 
             // Gimbal
-            gimbal_pitch: get_any_f64_raw(&["gimbal_pitch", " gimbal_pitch", "gimbal pitch", "gimbalpitch"]),
-            gimbal_roll: get_any_f64_raw(&["gimbal_roll", " gimbal_roll", "gimbal roll", "gimbalroll"]),
+            gimbal_pitch: get_any_f64_raw(&[
+                "gimbal_pitch",
+                " gimbal_pitch",
+                "gimbal pitch",
+                "gimbalpitch",
+            ]),
+            gimbal_roll: get_any_f64_raw(&[
+                "gimbal_roll",
+                " gimbal_roll",
+                "gimbal roll",
+                "gimbalroll",
+            ]),
             gimbal_yaw: get_any_f64_raw(&[
                 "gimbal_heading",
                 " gimbal_heading",
@@ -570,8 +584,8 @@ impl<'a> AirdataParser<'a> {
             _ => {
                 if points.len() >= 2 {
                     Some(
-                        (points.last().unwrap().timestamp_ms
-                            - points.first().unwrap().timestamp_ms) as f64
+                        (points.last().unwrap().timestamp_ms - points.first().unwrap().timestamp_ms)
+                            as f64
                             / 1000.0,
                     )
                 } else {
@@ -586,18 +600,11 @@ impl<'a> AirdataParser<'a> {
             .iter()
             .filter_map(|p| p.altitude)
             .fold(0.0f64, f64::max);
-        let max_speed = points
-            .iter()
-            .filter_map(|p| p.speed)
-            .fold(0.0f64, f64::max);
+        let max_speed = points.iter().filter_map(|p| p.speed).fold(0.0f64, f64::max);
 
         // Home location: first valid GPS point
-        let home_lat = points
-            .iter()
-            .find_map(|p| p.latitude);
-        let home_lon = points
-            .iter()
-            .find_map(|p| p.longitude);
+        let home_lat = points.iter().find_map(|p| p.latitude);
+        let home_lon = points.iter().find_map(|p| p.longitude);
 
         // Photo / video counts
         let (photo_count, video_count) = crate::models::count_media_events(points);
@@ -607,10 +614,10 @@ impl<'a> AirdataParser<'a> {
             file_name,
             display_name,
             file_hash: Some(file_hash.to_string()),
-            drone_model: None,     // Airdata CSV doesn't include drone model
-            drone_serial: None,    // not in CSV
-            aircraft_name: None,   // not in CSV
-            battery_serial: None,  // not in CSV
+            drone_model: None,    // Airdata CSV doesn't include drone model
+            drone_serial: None,   // not in CSV
+            aircraft_name: None,  // not in CSV
+            battery_serial: None, // not in CSV
             cycle_count: None,
             rc_serial: None,
             battery_life: None,
@@ -651,10 +658,7 @@ impl<'a> AirdataParser<'a> {
             .iter()
             .filter_map(|p| p.altitude)
             .fold(0.0f64, f64::max);
-        let max_speed_ms = points
-            .iter()
-            .filter_map(|p| p.speed)
-            .fold(0.0f64, f64::max);
+        let max_speed_ms = points.iter().filter_map(|p| p.speed).fold(0.0f64, f64::max);
 
         let speeds: Vec<f64> = points
             .iter()

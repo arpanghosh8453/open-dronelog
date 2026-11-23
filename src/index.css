@@ -1281,21 +1281,6 @@ body.theme-light .milestone-timeline {
   animation: initProgress 1.5s ease-in-out infinite;
 }
 
-/* ─── Donation banner marquee (mobile) ─────────────────────────── */
-@keyframes marqueeScroll {
-  0% {
-    transform: translateX(100%);
-  }
-
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
-.marquee-container {
-  position: relative;
-}
-
 /* Settings modal scrollbar — always visible on mobile */
 .settings-scroll {
   -webkit-overflow-scrolling: touch;
@@ -1358,21 +1343,4 @@ body.theme-light .sidebar-collapsed-toggle-btn {
 body.theme-light .sidebar-collapsed-toggle-btn:hover {
   background-color: #dde6f0;
   color: #1e293b;
-}
-
-.marquee-content {
-  animation: marqueeScroll 25s linear infinite;
-}
-
-/* On md+ screens, stop the marquee and center the text */
-@media (min-width: 768px) {
-  .marquee-content {
-    animation: none;
-    transform: none;
-  }
-
-  .md\:marquee-paused {
-    animation: none !important;
-    transform: none !important;
-  }
 }

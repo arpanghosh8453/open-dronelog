@@ -1,8 +1,8 @@
 {
   "sourceFingerprints": {
-    "readmeEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222",
-    "composeEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222",
-    "composeBuildEnvVars": "9ff3f9b422fe7e01898166fda2174b54e4cdfa6f23d5b02f00c245e2f7688222"
+    "readmeEnvVars": "dfd0536ff8a91ecda7b096f69182c7eb4617c6820485a5e7433774d69a08bee7",
+    "composeEnvVars": "dfd0536ff8a91ecda7b096f69182c7eb4617c6820485a5e7433774d69a08bee7",
+    "composeBuildEnvVars": "dfd0536ff8a91ecda7b096f69182c7eb4617c6820485a5e7433774d69a08bee7"
   },
   "sources": [
     "README.md",
@@ -10,6 +10,7 @@
     "docker-compose-build.yml"
   ],
   "variables": [
+    "CHAT_ALLOW_PRIVATE_PROVIDERS",
     "DATA_DIR",
     "DEFAULT_PROFILE_PASSWORD",
     "DJI_API_KEY",

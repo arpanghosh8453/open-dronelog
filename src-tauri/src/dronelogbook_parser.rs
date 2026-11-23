@@ -9,11 +9,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use chrono::{DateTime, NaiveDateTime, Utc, TimeZone};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 
 use crate::database::Database;
-use crate::models::{FlightMetadata, FlightMessage, FlightStats, TelemetryPoint};
-use crate::parser::{ParseResult, ParserError, LogParser};
+use crate::models::{FlightMessage, FlightMetadata, FlightStats, TelemetryPoint};
+use crate::parser::{LogParser, ParseResult, ParserError};
 
 /// Parse a timestamp string flexibly, handling multiple formats:
 /// - RFC3339: "2026-02-01T14:35:52+00:00" or "2026-02-01T14:35:52Z"
@@ -21,13 +21,13 @@ use crate::parser::{ParseResult, ParserError, LogParser};
 /// - ISO without timezone: "2026-02-01T14:35:52" or "2026-02-01 14:35:52" (assumed UTC)
 fn parse_timestamp_flexible(s: &str) -> Option<DateTime<Utc>> {
     let s = s.trim();
-    
+
     // Try RFC3339 first (includes timezone)
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
         log::debug!("Parsed timestamp as RFC3339: {} -> {}", s, dt);
         return Some(dt.with_timezone(&Utc));
     }
-    
+
     // Try DuckDB format: "2026-02-01 14:35:52+00" (short timezone offset)
     // Normalize to RFC3339 by adding :00 to timezone if needed
     if s.len() > 3 {
@@ -44,13 +44,18 @@ fn parse_timestamp_flexible(s: &str) -> Option<DateTime<Utc>> {
         } else {
             s.replace(' ', "T")
         };
-        
+
         if let Ok(dt) = DateTime::parse_from_rfc3339(&normalized) {
-            log::debug!("Parsed timestamp after normalization: {} -> {} -> {}", s, normalized, dt);
+            log::debug!(
+                "Parsed timestamp after normalization: {} -> {} -> {}",
+                s,
+                normalized,
+                dt
+            );
             return Some(dt.with_timezone(&Utc));
         }
     }
-    
+
     // Try parsing as naive datetime (no timezone) and assume UTC
     let formats = [
         "%Y-%m-%dT%H:%M:%S%.f",
@@ -58,14 +63,14 @@ fn parse_timestamp_flexible(s: &str) -> Option<DateTime<Utc>> {
         "%Y-%m-%d %H:%M:%S%.f",
         "%Y-%m-%d %H:%M:%S",
     ];
-    
+
     for fmt in &formats {
         if let Ok(ndt) = NaiveDateTime::parse_from_str(s, fmt) {
             log::debug!("Parsed timestamp as naive (assuming UTC): {} -> {}", s, ndt);
             return Some(Utc.from_utc_datetime(&ndt));
         }
     }
-    
+
     log::warn!("Failed to parse timestamp: {}", s);
     None
 }
@@ -177,10 +182,13 @@ impl<'a> DroneLogbookParser<'a> {
                         && lower.contains("lat")
                         && lower.contains("lng")
                         && (lower.contains("alt_m") || lower.contains("alt_ft"))
-                        && (lower.contains("distance_to_home_m") || lower.contains("distance_to_home_ft") || lower.contains("height_m") || lower.contains("height_ft"));
-                    let has_extended_cols = lower.contains("vps_height_m") 
+                        && (lower.contains("distance_to_home_m")
+                            || lower.contains("distance_to_home_ft")
+                            || lower.contains("height_m")
+                            || lower.contains("height_ft"));
+                    let has_extended_cols = lower.contains("vps_height_m")
                         || lower.contains("vps_height_ft")
-                        || lower.contains("rc_aileron") 
+                        || lower.contains("rc_aileron")
                         || lower.contains("metadata");
                     return has_basic_cols && has_extended_cols;
                 }
@@ -255,15 +263,20 @@ impl<'a> DroneLogbookParser<'a> {
         let header_line = header_line
             .ok_or_else(|| ParserError::Parse("No header line found in CSV file".to_string()))?;
 
-        let headers: Vec<String> = header_line.split(',').map(|s| s.trim().to_string()).collect();
+        let headers: Vec<String> = header_line
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
         let col_map = ColumnMap::new(&headers);
 
         // Find metadata and messages column indices
         let metadata_col_idx = headers.iter().position(|h| h.to_lowercase() == "metadata");
         let messages_col_idx = headers.iter().position(|h| h.to_lowercase() == "messages");
-        
+
         // Detect units from headers
-        let mut _is_dist_imp = headers.iter().any(|h| h.to_lowercase() == "distance_to_home_ft");
+        let mut _is_dist_imp = headers
+            .iter()
+            .any(|h| h.to_lowercase() == "distance_to_home_ft");
         let mut is_alt_imp = headers.iter().any(|h| h.to_lowercase() == "alt_ft");
         let mut speed_col = "speed_ms";
         let mut velocity_x_col = "velocity_x_ms";
@@ -311,9 +324,21 @@ impl<'a> DroneLogbookParser<'a> {
             // Parse the first data row to extract metadata
             if let Some(meta_idx) = metadata_col_idx {
                 let fields = Self::parse_csv_line(&line);
-                log::debug!("Parsed {} fields from first row, metadata column index: {}", fields.len(), meta_idx);
+                log::debug!(
+                    "Parsed {} fields from first row, metadata column index: {}",
+                    fields.len(),
+                    meta_idx
+                );
                 if let Some(meta_json) = fields.get(meta_idx) {
-                    log::debug!("Metadata JSON field (len={}): {:?}", meta_json.len(), if meta_json.len() > 200 { &meta_json[..200] } else { meta_json });
+                    log::debug!(
+                        "Metadata JSON field (len={}): {:?}",
+                        meta_json.len(),
+                        if meta_json.len() > 200 {
+                            &meta_json[..200]
+                        } else {
+                            meta_json
+                        }
+                    );
                     if !meta_json.is_empty() {
                         // Parse JSON metadata
                         match serde_json::from_str::<serde_json::Value>(meta_json) {
@@ -325,17 +350,21 @@ impl<'a> DroneLogbookParser<'a> {
                                             if let Some(tags_arr) = val.as_array() {
                                                 for tag_obj in tags_arr {
                                                     if let Some(tag_map) = tag_obj.as_object() {
-                                                        let tag_name = tag_map.get("tag")
+                                                        let tag_name = tag_map
+                                                            .get("tag")
                                                             .and_then(|v| v.as_str())
                                                             .unwrap_or("");
-                                                        let tag_type = tag_map.get("tag_type")
+                                                        let tag_type = tag_map
+                                                            .get("tag_type")
                                                             .and_then(|v| v.as_str())
                                                             .unwrap_or("auto");
                                                         if !tag_name.is_empty() {
                                                             if tag_type == "manual" {
-                                                                imported_manual_tags.push(tag_name.to_string());
+                                                                imported_manual_tags
+                                                                    .push(tag_name.to_string());
                                                             } else {
-                                                                imported_auto_tags.push(tag_name.to_string());
+                                                                imported_auto_tags
+                                                                    .push(tag_name.to_string());
                                                             }
                                                         }
                                                     }
@@ -346,13 +375,21 @@ impl<'a> DroneLogbookParser<'a> {
                                             continue;
                                         } else if key == "units" {
                                             if let Some(units_obj) = val.as_object() {
-                                                if let Some(dist) = units_obj.get("distance").and_then(|v| v.as_str()) {
+                                                if let Some(dist) = units_obj
+                                                    .get("distance")
+                                                    .and_then(|v| v.as_str())
+                                                {
                                                     _is_dist_imp = dist == "imperial";
                                                 }
-                                                if let Some(alt) = units_obj.get("altitude").and_then(|v| v.as_str()) {
+                                                if let Some(alt) = units_obj
+                                                    .get("altitude")
+                                                    .and_then(|v| v.as_str())
+                                                {
                                                     is_alt_imp = alt == "imperial";
                                                 }
-                                                if let Some(speed) = units_obj.get("speed").and_then(|v| v.as_str()) {
+                                                if let Some(speed) =
+                                                    units_obj.get("speed").and_then(|v| v.as_str())
+                                                {
                                                     let normalized = match speed {
                                                         "imperial" => "mph",
                                                         "metric" => "kmh",
@@ -389,7 +426,10 @@ impl<'a> DroneLogbookParser<'a> {
                                                         }
                                                     }
                                                 }
-                                                if let Some(temp) = units_obj.get("temperature").and_then(|v| v.as_str()) {
+                                                if let Some(temp) = units_obj
+                                                    .get("temperature")
+                                                    .and_then(|v| v.as_str())
+                                                {
                                                     is_temp_imp = temp == "imperial";
                                                 }
                                             }
@@ -403,7 +443,10 @@ impl<'a> DroneLogbookParser<'a> {
                                         };
                                         metadata_map.insert(key.to_lowercase(), val_str);
                                     }
-                                    log::info!("Successfully parsed {} metadata fields from JSON", metadata_map.len());
+                                    log::info!(
+                                        "Successfully parsed {} metadata fields from JSON",
+                                        metadata_map.len()
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -414,7 +457,11 @@ impl<'a> DroneLogbookParser<'a> {
                         log::debug!("Metadata field is empty");
                     }
                 } else {
-                    log::warn!("Metadata column index {} out of bounds (fields: {})", meta_idx, fields.len());
+                    log::warn!(
+                        "Metadata column index {} out of bounds (fields: {})",
+                        meta_idx,
+                        fields.len()
+                    );
                 }
 
                 // Parse messages from the messages column (same row)
@@ -427,14 +474,17 @@ impl<'a> DroneLogbookParser<'a> {
                                     if let Some(arr) = json_val.as_array() {
                                         for msg_obj in arr {
                                             if let Some(obj) = msg_obj.as_object() {
-                                                let timestamp_ms = obj.get("timestamp_ms")
+                                                let timestamp_ms = obj
+                                                    .get("timestamp_ms")
                                                     .and_then(|v| v.as_i64())
                                                     .unwrap_or(0);
-                                                let message_type = obj.get("type")
+                                                let message_type = obj
+                                                    .get("type")
                                                     .and_then(|v| v.as_str())
                                                     .unwrap_or("tip")
                                                     .to_string();
-                                                let message = obj.get("message")
+                                                let message = obj
+                                                    .get("message")
                                                     .and_then(|v| v.as_str())
                                                     .unwrap_or("")
                                                     .to_string();
@@ -447,7 +497,10 @@ impl<'a> DroneLogbookParser<'a> {
                                                 }
                                             }
                                         }
-                                        log::info!("Parsed {} messages from CSV", imported_messages.len());
+                                        log::info!(
+                                            "Parsed {} messages from CSV",
+                                            imported_messages.len()
+                                        );
                                     }
                                 }
                                 Err(e) => {
@@ -470,15 +523,28 @@ impl<'a> DroneLogbookParser<'a> {
         let meta_drone_serial = metadata_map.get("drone_serial").cloned();
         let meta_aircraft_name = metadata_map.get("aircraft_name").cloned();
         let meta_battery_serial = metadata_map.get("battery_serial").cloned();
-        let meta_cycle_count = metadata_map.get("cycle_count").and_then(|s| s.parse::<i32>().ok());
-        let meta_rc_serial = metadata_map.get("rc_serial").cloned().filter(|s| !s.is_empty());
-        let meta_battery_life = metadata_map.get("battery_life").and_then(|s| s.parse::<i32>().ok());
-        let meta_start_time = metadata_map.get("start_time").and_then(|s| {
-            parse_timestamp_flexible(s)
-        });
-        let meta_home_lat = metadata_map.get("home_lat").and_then(|s| s.parse::<f64>().ok());
-        let meta_home_lon = metadata_map.get("home_lon").and_then(|s| s.parse::<f64>().ok());
-        let meta_duration_secs = metadata_map.get("duration_secs").and_then(|s| s.parse::<f64>().ok());
+        let meta_cycle_count = metadata_map
+            .get("cycle_count")
+            .and_then(|s| s.parse::<i32>().ok());
+        let meta_rc_serial = metadata_map
+            .get("rc_serial")
+            .cloned()
+            .filter(|s| !s.is_empty());
+        let meta_battery_life = metadata_map
+            .get("battery_life")
+            .and_then(|s| s.parse::<i32>().ok());
+        let meta_start_time = metadata_map
+            .get("start_time")
+            .and_then(|s| parse_timestamp_flexible(s));
+        let meta_home_lat = metadata_map
+            .get("home_lat")
+            .and_then(|s| s.parse::<f64>().ok());
+        let meta_home_lon = metadata_map
+            .get("home_lon")
+            .and_then(|s| s.parse::<f64>().ok());
+        let meta_duration_secs = metadata_map
+            .get("duration_secs")
+            .and_then(|s| s.parse::<f64>().ok());
         let meta_notes = metadata_map.get("notes").cloned().filter(|s| !s.is_empty());
         let meta_color = metadata_map.get("color").cloned().filter(|s| !s.is_empty());
 
@@ -489,7 +555,7 @@ impl<'a> DroneLogbookParser<'a> {
         let mut points = Vec::new();
         let mut first_valid_time_s: Option<f64> = None;
         let mut last_valid_time_s: Option<f64> = None;
-        
+
         // Track min/max for stats
         let mut max_speed: f64 = 0.0;
         let mut max_altitude: f64 = 0.0;
@@ -500,7 +566,18 @@ impl<'a> DroneLogbookParser<'a> {
         let mut home_lon: Option<f64> = meta_home_lon;
 
         // Helper to parse a row into a TelemetryPoint
-        let parse_row = |fields: &[&str], col_map: &ColumnMap, first_valid_time_s: &mut Option<f64>, last_valid_time_s: &mut Option<f64>, prev_lat: &mut Option<f64>, prev_lon: &mut Option<f64>, home_lat: &mut Option<f64>, home_lon: &mut Option<f64>, max_speed: &mut f64, max_altitude: &mut f64, total_distance: &mut f64| -> Option<TelemetryPoint> {
+        let parse_row = |fields: &[&str],
+                         col_map: &ColumnMap,
+                         first_valid_time_s: &mut Option<f64>,
+                         last_valid_time_s: &mut Option<f64>,
+                         prev_lat: &mut Option<f64>,
+                         prev_lon: &mut Option<f64>,
+                         home_lat: &mut Option<f64>,
+                         home_lon: &mut Option<f64>,
+                         max_speed: &mut f64,
+                         max_altitude: &mut f64,
+                         total_distance: &mut f64|
+         -> Option<TelemetryPoint> {
             // Get time in seconds and convert to milliseconds
             let time_s = col_map.get_f64(fields, "time_s");
             let timestamp_ms = time_s.map(|t| (t * 1000.0) as i64).unwrap_or(0);
@@ -524,7 +601,9 @@ impl<'a> DroneLogbookParser<'a> {
             }
 
             // Calculate distance traveled
-            if let (Some(curr_lat), Some(curr_lon), Some(p_lat), Some(p_lon)) = (lat, lon, *prev_lat, *prev_lon) {
+            if let (Some(curr_lat), Some(curr_lon), Some(p_lat), Some(p_lon)) =
+                (lat, lon, *prev_lat, *prev_lon)
+            {
                 let dist = haversine_distance(p_lat, p_lon, curr_lat, curr_lon);
                 *total_distance += dist;
             }
@@ -540,8 +619,14 @@ impl<'a> DroneLogbookParser<'a> {
                     *max_speed = speed;
                 }
             }
-            if let Some(alt_raw) = col_map.get_f64(fields, if is_alt_imp { "alt_ft" } else { "alt_m" }) {
-                let alt = if is_alt_imp { alt_raw / 3.28084 } else { alt_raw };
+            if let Some(alt_raw) =
+                col_map.get_f64(fields, if is_alt_imp { "alt_ft" } else { "alt_m" })
+            {
+                let alt = if is_alt_imp {
+                    alt_raw / 3.28084
+                } else {
+                    alt_raw
+                };
                 if alt > *max_altitude {
                     *max_altitude = alt;
                 }
@@ -555,19 +640,50 @@ impl<'a> DroneLogbookParser<'a> {
                 longitude: lon,
                 altitude: {
                     let alt = col_map.get_f64(fields, if is_alt_imp { "alt_ft" } else { "alt_m" });
-                    if is_alt_imp { alt.map(|v| v / 3.28084) } else { alt }
+                    if is_alt_imp {
+                        alt.map(|v| v / 3.28084)
+                    } else {
+                        alt
+                    }
                 },
                 height: {
-                    let h = col_map.get_f64(fields, if is_alt_imp { "height_ft" } else { "height_m" });
-                    if is_alt_imp { h.map(|v| v / 3.28084) } else { h }
+                    let h =
+                        col_map.get_f64(fields, if is_alt_imp { "height_ft" } else { "height_m" });
+                    if is_alt_imp {
+                        h.map(|v| v / 3.28084)
+                    } else {
+                        h
+                    }
                 },
                 vps_height: {
-                    let vps = col_map.get_f64(fields, if is_alt_imp { "vps_height_ft" } else { "vps_height_m" });
-                    if is_alt_imp { vps.map(|v| v / 3.28084) } else { vps }
+                    let vps = col_map.get_f64(
+                        fields,
+                        if is_alt_imp {
+                            "vps_height_ft"
+                        } else {
+                            "vps_height_m"
+                        },
+                    );
+                    if is_alt_imp {
+                        vps.map(|v| v / 3.28084)
+                    } else {
+                        vps
+                    }
                 },
                 altitude_abs: {
-                    let alt_abs = col_map.get_f64(fields, if is_alt_imp { "altitude_ft" } else { "altitude_m" });
-                    if is_alt_imp { alt_abs.map(|v| v / 3.28084) } else { alt_abs }
+                    let alt_abs = col_map.get_f64(
+                        fields,
+                        if is_alt_imp {
+                            "altitude_ft"
+                        } else {
+                            "altitude_m"
+                        },
+                    );
+                    if is_alt_imp {
+                        alt_abs.map(|v| v / 3.28084)
+                    } else {
+                        alt_abs
+                    }
                 },
 
                 // Velocity
@@ -603,8 +719,19 @@ impl<'a> DroneLogbookParser<'a> {
                 battery_voltage: col_map.get_f64(fields, "battery_voltage_v"),
                 battery_current: None, // Not in our CSV export
                 battery_temp: {
-                    let temp = col_map.get_f64(fields, if is_temp_imp { "battery_temp_f" } else { "battery_temp_c" });
-                    if is_temp_imp { temp.map(|v| (v - 32.0) * 5.0 / 9.0) } else { temp }
+                    let temp = col_map.get_f64(
+                        fields,
+                        if is_temp_imp {
+                            "battery_temp_f"
+                        } else {
+                            "battery_temp_c"
+                        },
+                    );
+                    if is_temp_imp {
+                        temp.map(|v| (v - 32.0) * 5.0 / 9.0)
+                    } else {
+                        temp
+                    }
                 },
                 cell_voltages: col_map.get_f64_vec(fields, "cell_voltages"),
 
@@ -643,7 +770,19 @@ impl<'a> DroneLogbookParser<'a> {
             let fields_owned = Self::parse_csv_line(first_line);
             let fields: Vec<&str> = fields_owned.iter().map(String::as_str).collect();
             if fields.len() >= headers.len() / 2 {
-                if let Some(point) = parse_row(&fields, &col_map, &mut first_valid_time_s, &mut last_valid_time_s, &mut prev_lat, &mut prev_lon, &mut home_lat, &mut home_lon, &mut max_speed, &mut max_altitude, &mut total_distance) {
+                if let Some(point) = parse_row(
+                    &fields,
+                    &col_map,
+                    &mut first_valid_time_s,
+                    &mut last_valid_time_s,
+                    &mut prev_lat,
+                    &mut prev_lon,
+                    &mut home_lat,
+                    &mut home_lon,
+                    &mut max_speed,
+                    &mut max_altitude,
+                    &mut total_distance,
+                ) {
                     points.push(point);
                 }
             }
@@ -670,7 +809,19 @@ impl<'a> DroneLogbookParser<'a> {
                 continue;
             }
 
-            if let Some(point) = parse_row(&fields, &col_map, &mut first_valid_time_s, &mut last_valid_time_s, &mut prev_lat, &mut prev_lon, &mut home_lat, &mut home_lon, &mut max_speed, &mut max_altitude, &mut total_distance) {
+            if let Some(point) = parse_row(
+                &fields,
+                &col_map,
+                &mut first_valid_time_s,
+                &mut last_valid_time_s,
+                &mut prev_lat,
+                &mut prev_lon,
+                &mut home_lat,
+                &mut home_lon,
+                &mut max_speed,
+                &mut max_altitude,
+                &mut total_distance,
+            ) {
                 points.push(point);
             }
         }
@@ -728,9 +879,8 @@ impl<'a> DroneLogbookParser<'a> {
                 .filter(|s| !s.is_empty()),
             battery_life: meta_battery_life,
             start_time,
-            end_time: start_time.map(|st| {
-                st + chrono::Duration::seconds(duration_secs.unwrap_or(0.0) as i64)
-            }),
+            end_time: start_time
+                .map(|st| st + chrono::Duration::seconds(duration_secs.unwrap_or(0.0) as i64)),
             duration_secs,
             total_distance: Some(total_distance),
             max_altitude: Some(max_altitude),
@@ -757,8 +907,17 @@ impl<'a> DroneLogbookParser<'a> {
             total_distance_m: total_distance,
             max_altitude_m: max_altitude,
             max_speed_ms: max_speed,
-            avg_speed_ms: if duration_secs.unwrap_or(0.0) > 0.0 { total_distance / duration_secs.unwrap_or(1.0) } else { 0.0 },
-            min_battery: points.iter().filter_map(|p| p.battery_percent).filter(|&v| v > 0).min().unwrap_or(0),
+            avg_speed_ms: if duration_secs.unwrap_or(0.0) > 0.0 {
+                total_distance / duration_secs.unwrap_or(1.0)
+            } else {
+                0.0
+            },
+            min_battery: points
+                .iter()
+                .filter_map(|p| p.battery_percent)
+                .filter(|&v| v > 0)
+                .min()
+                .unwrap_or(0),
             home_location: home_lat.zip(home_lon).map(|(lat, lon)| [lon, lat]),
             max_distance_from_home_m: 0.0, // Not calculated during re-import
             start_battery_percent: points.first().and_then(|p| p.battery_percent),
@@ -768,14 +927,14 @@ impl<'a> DroneLogbookParser<'a> {
 
         // Start with "Re-imported" tag and merge with imported auto tags
         let mut tags = vec!["Re-imported".to_string()];
-        
+
         // Add imported auto tags (from the original export) - skip "Re-imported" to avoid duplicate
         for tag in &imported_auto_tags {
             if tag != "Re-imported" && !tags.contains(tag) {
                 tags.push(tag.clone());
             }
         }
-        
+
         // Generate fresh smart tags and add any new ones not already present
         let generated_tags = LogParser::generate_smart_tags(&metadata, &stats);
         for tag in generated_tags {
@@ -783,11 +942,24 @@ impl<'a> DroneLogbookParser<'a> {
                 tags.push(tag);
             }
         }
-        
-        log::info!("Final auto tags: {:?}, manual tags: {:?}, notes: {:?}, messages: {}", 
-            tags, imported_manual_tags, meta_notes.is_some(), imported_messages.len());
 
-        Ok(ParseResult { metadata, points, tags, manual_tags: imported_manual_tags, notes: meta_notes, color: meta_color, messages: imported_messages })
+        log::info!(
+            "Final auto tags: {:?}, manual tags: {:?}, notes: {:?}, messages: {}",
+            tags,
+            imported_manual_tags,
+            meta_notes.is_some(),
+            imported_messages.len()
+        );
+
+        Ok(ParseResult {
+            metadata,
+            points,
+            tags,
+            manual_tags: imported_manual_tags,
+            notes: meta_notes,
+            color: meta_color,
+            messages: imported_messages,
+        })
     }
 }
 
@@ -817,14 +989,19 @@ fn extract_datetime_from_filename(filename: &str) -> Option<DateTime<Utc>> {
             for i in 0..parts.len().saturating_sub(1) {
                 let date_part = parts[i];
                 let time_part = parts.get(i + 1).copied().unwrap_or("");
-                
+
                 // Check if date_part looks like YYYY-MM-DD
                 if date_part.len() == 10 && date_part.chars().filter(|c| *c == '-').count() == 2 {
                     // Check if time_part looks like HH-MM-SS
                     let time_clean = time_part.replace(".csv", "").replace(".CSV", "");
-                    if time_clean.len() >= 8 && time_clean.chars().filter(|c| *c == '-').count() == 2 {
-                        let datetime_str = format!("{} {}", date_part, time_clean.replace('-', ":"));
-                        if let Ok(ndt) = NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S") {
+                    if time_clean.len() >= 8
+                        && time_clean.chars().filter(|c| *c == '-').count() == 2
+                    {
+                        let datetime_str =
+                            format!("{} {}", date_part, time_clean.replace('-', ":"));
+                        if let Ok(ndt) =
+                            NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S")
+                        {
                             return Some(DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc));
                         }
                     }

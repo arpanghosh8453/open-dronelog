@@ -368,6 +368,7 @@ When `KEEP_UPLOADED_FILES=true` is set, original log files are preserved in an `
 | `PROFILE_CREATION_PASS` | (not set) | Master password required for creating or deleting profiles in web/Docker mode. When unset, anyone can create and delete profiles. |
 | `MANAGER_OVERVIEW` | (not set) | Set to `true` to offer a read-only overview of every profile's flight totals, unlocked with the master password. Needs `PROFILE_CREATION_PASS`. |
 | `DEFAULT_PROFILE_PASSWORD` | (not set) | Optional one-time initializer for the `default` profile password at startup. If a default password already exists, it is not overwritten and startup logs that initialization was skipped. If unset or empty (and no existing password), the default profile remains unprotected. |
+| `CHAT_ALLOW_PRIVATE_PROVIDERS` | `false` | Allow trusted private/loopback model providers from Docker. Cloud metadata addresses remain blocked. |
 | `SESSION_TTL_HOURS` | `24`           | Session token lifetime in hours. After expiry the user must re-authenticate. |
 
 ### Automatic log sync (Docker)
@@ -483,6 +484,12 @@ For production deployments, a reverse proxy with TLS is essential.
 - **Database Location**: Stored in the platform-specific app data directory (e.g., AppData on Windows, Application Support on macOS, and local share on Linux). In Docker mode, data is stored in `/data/drone-logbook` (persisted via a Docker volume).
 - **API Guide**: Available API request paths and response structure is provided in the [API documentation](/docs/api-guide.md) page. 
 - **Log Files**: App logs are written to the platform-specific log directory and surfaced in Settings. In Docker mode, logs are written to stdout.
+
+## Flight Chat
+
+The **Chat** tab provides read-only analysis of the current profile using your own OpenAI or OpenAI-compatible API key. Discover models, use their default reasoning behavior, test tool calling, and ask for filtered flight searches, advanced grouped statistics, tables, or bar/line/donut charts. Chat can also explain how to use available features. Credentials and conversations use encrypted storage separate from flight backups in both desktop and Docker deployments.
+
+See the [flight chat guide](docs/chat.md) for setup, privacy, encryption-key persistence, local providers, query semantics and limits.
 
 ## Context Management
 

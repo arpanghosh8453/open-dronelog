@@ -19,9 +19,17 @@ pub fn ensure_battery_pair_file(data_dir: &Path) -> Result<PathBuf, String> {
     if !file_path.exists() {
         std::fs::write(&file_path, "{}\n")
             .map_err(|e| format!("Failed to create {}: {}", BATTERY_PAIR_FILE, e))?;
-        log::info!("Created default {} at {}", BATTERY_PAIR_FILE, file_path.display());
+        log::info!(
+            "Created default {} at {}",
+            BATTERY_PAIR_FILE,
+            file_path.display()
+        );
     } else {
-        log::debug!("Found existing {} at {}", BATTERY_PAIR_FILE, file_path.display());
+        log::debug!(
+            "Found existing {} at {}",
+            BATTERY_PAIR_FILE,
+            file_path.display()
+        );
     }
 
     Ok(file_path)

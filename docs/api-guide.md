@@ -504,3 +504,25 @@ The DJI API key (for log decryption) is stored in `config.json` and never sent a
 | **Rate limiting** | Per-profile lockout only (5 attempts / 60s); no global IP-based limiting |
 | **CSRF** | No CSRF tokens; relies on same-origin policy |
 | **Multi-instance** | Session store not shared across backend instances |
+
+
+## Flight Chat
+
+Chat routes use the existing `X-Session` / `X-Profile` authorization boundary. Requests are restricted to the resolved profile; tools cannot select another profile. Streaming execution rechecks authorization before provider/tool rounds. Desktop commands also reject stale profile/database state.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/chat/operation` | Body `{ operation, payload }`. Operations: `connection`, `save_connection`, `remove_connection`, `models`, `test`, `list`, `conversation`, `delete`. |
+| GET | `/api/chat/conversations` | List conversation summaries. Optional `?id=...` returns one conversation without internal provider continuation items. |
+| POST | `/api/chat/send` | SSE event stream. Body `{ request_id, conversation_id?, message, timezone, unit_system }`. `request_id` is a UUID. |
+| POST | `/api/chat/cancel` | Body `{ request_id }`. Stops only the matching request in the caller's profile. |
+
+Connection input: `{ provider: "openai" | "custom", base_url, api_format: "responses" | "chat_completions", model, api_key? }`. Omit `api_key` to preserve the saved key for the same URL; send an empty string to explicitly clear it. Moving to a different URL requires an explicit key choice. Public connection responses contain `has_api_key`, never the key.
+
+`models` and `test` accept a connection input as payload to test unsaved settings; use `null` for the saved connection. `test` sends a synthetic billable request with no flight data. `conversation` and `delete` use payload `{ id }`.
+
+SSE events have a `type`: `conversation`, `text_delta`, `tool_started`, `result`, `usage`, `completed`, or `error`. Errors after stream startup arrive as an `error` event. Client disconnection cancels the active work.
+
+Tauri commands: `chat_operation(profile, operation, payload)`, `chat_stream(profile, request, on_event)` with a Tauri channel, and `chat_cancel(profile, request_id)`.
+
+See [chat.md](chat.md) for tool schemas, encrypted storage and deployment details.

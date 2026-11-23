@@ -15,6 +15,7 @@
 mod airdata_parser;
 mod api;
 mod battery_pairs;
+mod chat;
 mod database;
 mod dronedeploy_parser;
 mod dronelogbook_parser;
@@ -43,8 +44,7 @@ mod tauri_app;
 
 #[cfg(all(feature = "web", not(feature = "tauri-app")))]
 async fn run_web() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
-        .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
 
     let data_dir = std::env::var("DATA_DIR")
         .map(std::path::PathBuf::from)
@@ -90,7 +90,9 @@ fn main() {
 
     #[cfg(not(any(feature = "tauri-app", feature = "web")))]
     {
-        eprintln!("Error: No feature flag enabled. Build with --features tauri-app or --features web");
+        eprintln!(
+            "Error: No feature flag enabled. Build with --features tauri-app or --features web"
+        );
         std::process::exit(1);
     }
 }

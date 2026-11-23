@@ -3,7 +3,7 @@
  * Orchestrates the flight list sidebar, charts, and map
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFlightStore } from '@/stores/flightStore';
 import { FlightList } from './FlightList';
@@ -22,6 +22,8 @@ import { Overview } from './Overview';
 import { ProfileSelector } from './ProfileSelector';
 import { isWebMode } from '@/lib/api';
 import { useIsMobileRuntime } from '@/hooks/platform/useIsMobileRuntime';
+
+const ChatPanel = lazy(() => import('@/components/chat/ChatPanel').then(module => ({ default: module.ChatPanel })));
 
 export function Dashboard() {
   const isMobileRuntime = useIsMobileRuntime();
@@ -45,7 +47,21 @@ export function Dashboard() {
   const { t } = useTranslation();
   const [showSettings, setShowSettings] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
-  const [activeView, setActiveView] = useState<'flights' | 'overview'>('overview');
+  const [activeView, setActiveView] = useState<'flights' | 'overview' | 'chat'>(() => window.location.hash === '#chat' ? 'chat' : 'overview');
+  const activeChatProfile = useFlightStore(state => state.activeProfile);
+  // Report links stay scoped to the profile that generated their evidence.
+  useEffect(() => {
+    if (!isFlightsInitialized) return;
+    const url = new URL(window.location.href);
+    const id = Number(url.searchParams.get('chatFlight'));
+    const profile = url.searchParams.get('chatProfile');
+    if (!Number.isSafeInteger(id) || id <= 0 || profile !== useFlightStore.getState().activeProfile) return;
+    const time = Number(url.searchParams.get('chatTime'));
+    useFlightStore.getState().setChatReplayRequest(url.searchParams.has('chatTime') && Number.isFinite(time) && time >= 0 ? { flightId: id, elapsedMs: time } : null);
+    url.searchParams.delete('chatFlight'); url.searchParams.delete('chatProfile'); url.searchParams.delete('chatTime');
+    window.history.replaceState(null, '', url); setActiveView('flights');
+    void useFlightStore.getState().selectFlight(id);
+  }, [isFlightsInitialized, activeChatProfile]);
   const [topSidebarFlightId, setTopSidebarFlightId] = useState<number | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof localStorage !== 'undefined') {
@@ -57,7 +73,7 @@ export function Dashboard() {
     }
     return 340;
   });
-  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(() => window.innerWidth < 768 && window.location.hash === '#chat');
   // Start with null, determine collapsed state after flights are loaded from DB
   const [isImporterCollapsed, setIsImporterCollapsed] = useState<boolean | null>(null);
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(() => {
@@ -381,6 +397,13 @@ export function Dashboard() {
               >
                 {t('dashboard.overview')}
               </button>
+              <button
+                onClick={() => { setActiveView('chat'); if (window.innerWidth < 768) setIsSidebarHidden(true); }}
+                className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors ${activeView === 'chat' ? 'bg-drone-primary/20 border-drone-primary text-white' : 'border-gray-700 text-gray-400 hover:text-white'}`}
+                aria-pressed={activeView === 'chat'}
+              >
+                {t('chat.tab')}
+              </button>
               <ProfileSelector />
             </div>
           </div>
@@ -615,7 +638,7 @@ export function Dashboard() {
       </aside>
 
       {/* Mobile Show Sidebar Button */}
-      {isSidebarHidden && (
+      {isSidebarHidden && activeView !== 'chat' && (
         <div className="fixed right-6 mobile-safe-fixed-bottom z-40 md:hidden">
           <button
             onClick={() => setIsSidebarHidden(false)}
@@ -638,7 +661,16 @@ export function Dashboard() {
           }
         }}
       >
-        {isLoading ? (
+        {activeView === 'chat' ? (
+          <Suspense fallback={<div className="p-6 text-sm text-gray-400">{t('chat.loading')}</div>}>
+            <ChatPanel key={useFlightStore.getState().activeProfile} onOpenSidebar={() => setIsSidebarHidden(false)} onOpenFlight={(id, elapsedMs) => {
+              useFlightStore.getState().setChatReplayRequest(elapsedMs !== undefined ? { flightId: id, elapsedMs } : null);
+              setActiveView('flights');
+              const url = new URL(window.location.href); url.hash = ''; window.history.replaceState(null, '', url);
+              void useFlightStore.getState().selectFlight(id);
+            }} />
+          </Suspense>
+        ) : isLoading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
               <div

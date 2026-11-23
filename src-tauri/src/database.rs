@@ -15,7 +15,11 @@ use chrono::{Duration, NaiveDate, Utc};
 use duckdb::{params, Connection, OptionalExt, Result as DuckResult};
 use thiserror::Error;
 
-use crate::models::{BatteryHealthPoint, BatteryUsage, DroneUsage, Flight, FlightDateCount, FlightMessage, FlightMetadata, FlightTag, OverviewStats, TelemetryPoint, TelemetryRecord, TopDistanceFlight, TopFlight};
+use crate::models::{
+    BatteryHealthPoint, BatteryUsage, DroneUsage, Flight, FlightDateCount, FlightMessage,
+    FlightMetadata, FlightTag, OverviewStats, TelemetryPoint, TelemetryRecord, TopDistanceFlight,
+    TopFlight,
+};
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
@@ -33,19 +37,34 @@ pub enum DatabaseError {
 pub struct Database {
     conn: Mutex<Connection>,
     pub data_dir: PathBuf,
+    pub(crate) profile: String,
 }
 
 impl Drop for Database {
     fn drop(&mut self) {
         log::info!("Dropping Database instance. DuckDB will now gracefully close and flush remaining WAL data to disk...");
         let drop_start = std::time::Instant::now();
-        // The actual DuckDB connection drop happens automatically right after this, 
+        // The actual DuckDB connection drop happens automatically right after this,
         // which triggers any implicit final checkpoints.
-        log::info!("Database drop initiated (drop handler took {:.3}s)", drop_start.elapsed().as_secs_f64());
+        log::info!(
+            "Database drop initiated (drop handler took {:.3}s)",
+            drop_start.elapsed().as_secs_f64()
+        );
     }
 }
 
 impl Database {
+    /// A connection to the same in-process database for bounded assistant reads.
+    /// Callers compile queries from an allowlist; this is never a raw SQL API.
+    pub(crate) fn analytics_connection(&self) -> Result<Connection, String> {
+        self.conn
+            .try_lock()
+            .map_err(|_| {
+                "Database is busy. Retry after the current import or save finishes.".to_string()
+            })?
+            .try_clone()
+            .map_err(|e| e.to_string())
+    }
     /// Initialize the database in the app data directory for a given profile.
     ///
     /// Profile "default" uses `flights.db`, any other profile uses `flights_{name}.db`.
@@ -84,6 +103,7 @@ impl Database {
         let db = Self {
             conn: Mutex::new(conn),
             data_dir: app_data_dir,
+            profile: profile.to_string(),
         };
 
         // Initialize schema
@@ -101,9 +121,16 @@ impl Database {
         log::info!("Starting post-startup WAL checkpoint to clear large migration logs...");
         let checkpoint_start = std::time::Instant::now();
         if let Err(e) = db.conn.lock().unwrap().execute_batch("CHECKPOINT; VACUUM;") {
-            log::warn!("Post-startup WAL checkpoint & vacuum failed (non-fatal): {} (took {:.1}s)", e, checkpoint_start.elapsed().as_secs_f64());
+            log::warn!(
+                "Post-startup WAL checkpoint & vacuum failed (non-fatal): {} (took {:.1}s)",
+                e,
+                checkpoint_start.elapsed().as_secs_f64()
+            );
         } else {
-            log::info!("Post-startup WAL checkpoint & vacuum completed successfully in {:.1}s", checkpoint_start.elapsed().as_secs_f64());
+            log::info!(
+                "Post-startup WAL checkpoint & vacuum completed successfully in {:.1}s",
+                checkpoint_start.elapsed().as_secs_f64()
+            );
         }
 
         Ok(db)
@@ -133,7 +160,10 @@ impl Database {
                 match Connection::open(db_path) {
                     Ok(conn) => Ok(conn),
                     Err(second_err) => {
-                        log::warn!("WAL recovery failed: {}. Backing up DB and recreating...", second_err);
+                        log::warn!(
+                            "WAL recovery failed: {}. Backing up DB and recreating...",
+                            second_err
+                        );
 
                         let backup_path = Self::backup_db(db_path)?;
                         log::warn!("Database backed up to {:?}", backup_path);
@@ -204,7 +234,11 @@ impl Database {
             "SET autoload_known_extensions=false;",
         ] {
             if let Err(e) = conn.execute_batch(stmt) {
-                log::debug!("DuckDB setting not applied '{}': {}", stmt.trim_end_matches(';'), e);
+                log::debug!(
+                    "DuckDB setting not applied '{}': {}",
+                    stmt.trim_end_matches(';'),
+                    e
+                );
             }
         }
         Ok(())
@@ -415,7 +449,10 @@ impl Database {
     }
 
     /// Get existing column names for a table (single query)
-    fn get_table_columns(conn: &Connection, table_name: &str) -> Result<HashSet<String>, DatabaseError> {
+    fn get_table_columns(
+        conn: &Connection,
+        table_name: &str,
+    ) -> Result<HashSet<String>, DatabaseError> {
         let mut stmt = conn.prepare(&format!("PRAGMA table_info('{}')", table_name))?;
         let columns: HashSet<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))?
@@ -426,17 +463,44 @@ impl Database {
     /// Migrate flights table - only add missing columns
     fn migrate_flights_table(conn: &Connection) -> Result<(), DatabaseError> {
         let columns = Self::get_table_columns(conn, "flights")?;
-        
+
         let migrations: &[(&str, &str)] = &[
-            ("display_name", "ALTER TABLE flights ADD COLUMN display_name VARCHAR"),
-            ("aircraft_name", "ALTER TABLE flights ADD COLUMN aircraft_name VARCHAR"),
-            ("battery_serial", "ALTER TABLE flights ADD COLUMN battery_serial VARCHAR"),
-            ("photo_count", "ALTER TABLE flights ADD COLUMN photo_count INTEGER"),
-            ("video_count", "ALTER TABLE flights ADD COLUMN video_count INTEGER"),
-            ("color", "ALTER TABLE flights ADD COLUMN color VARCHAR DEFAULT '#7dd3fc'"),
-            ("cycle_count", "ALTER TABLE flights ADD COLUMN cycle_count INTEGER"),
-            ("rc_serial", "ALTER TABLE flights ADD COLUMN rc_serial VARCHAR"),
-            ("battery_life", "ALTER TABLE flights ADD COLUMN battery_life INTEGER"),
+            (
+                "display_name",
+                "ALTER TABLE flights ADD COLUMN display_name VARCHAR",
+            ),
+            (
+                "aircraft_name",
+                "ALTER TABLE flights ADD COLUMN aircraft_name VARCHAR",
+            ),
+            (
+                "battery_serial",
+                "ALTER TABLE flights ADD COLUMN battery_serial VARCHAR",
+            ),
+            (
+                "photo_count",
+                "ALTER TABLE flights ADD COLUMN photo_count INTEGER",
+            ),
+            (
+                "video_count",
+                "ALTER TABLE flights ADD COLUMN video_count INTEGER",
+            ),
+            (
+                "color",
+                "ALTER TABLE flights ADD COLUMN color VARCHAR DEFAULT '#7dd3fc'",
+            ),
+            (
+                "cycle_count",
+                "ALTER TABLE flights ADD COLUMN cycle_count INTEGER",
+            ),
+            (
+                "rc_serial",
+                "ALTER TABLE flights ADD COLUMN rc_serial VARCHAR",
+            ),
+            (
+                "battery_life",
+                "ALTER TABLE flights ADD COLUMN battery_life INTEGER",
+            ),
         ];
 
         let need_backfill = !columns.contains("photo_count");
@@ -479,21 +543,57 @@ impl Database {
     /// Migrate telemetry table - only add missing columns
     fn migrate_telemetry_table(conn: &Connection) -> Result<(), DatabaseError> {
         let columns = Self::get_table_columns(conn, "telemetry")?;
-        
+
         let migrations: &[(&str, &str)] = &[
             ("height", "ALTER TABLE telemetry ADD COLUMN height FLOAT"),
-            ("vps_height", "ALTER TABLE telemetry ADD COLUMN vps_height FLOAT"),
-            ("rc_uplink", "ALTER TABLE telemetry ADD COLUMN rc_uplink INTEGER"),
-            ("rc_downlink", "ALTER TABLE telemetry ADD COLUMN rc_downlink INTEGER"),
-            ("rc_aileron", "ALTER TABLE telemetry ADD COLUMN rc_aileron FLOAT"),
-            ("rc_elevator", "ALTER TABLE telemetry ADD COLUMN rc_elevator FLOAT"),
-            ("rc_throttle", "ALTER TABLE telemetry ADD COLUMN rc_throttle FLOAT"),
-            ("rc_rudder", "ALTER TABLE telemetry ADD COLUMN rc_rudder FLOAT"),
-            ("is_photo", "ALTER TABLE telemetry ADD COLUMN is_photo BOOLEAN"),
-            ("is_video", "ALTER TABLE telemetry ADD COLUMN is_video BOOLEAN"),
-            ("cell_voltages", "ALTER TABLE telemetry ADD COLUMN cell_voltages VARCHAR"),
-            ("battery_full_capacity", "ALTER TABLE telemetry ADD COLUMN battery_full_capacity FLOAT"),
-            ("battery_remained_capacity", "ALTER TABLE telemetry ADD COLUMN battery_remained_capacity FLOAT"),
+            (
+                "vps_height",
+                "ALTER TABLE telemetry ADD COLUMN vps_height FLOAT",
+            ),
+            (
+                "rc_uplink",
+                "ALTER TABLE telemetry ADD COLUMN rc_uplink INTEGER",
+            ),
+            (
+                "rc_downlink",
+                "ALTER TABLE telemetry ADD COLUMN rc_downlink INTEGER",
+            ),
+            (
+                "rc_aileron",
+                "ALTER TABLE telemetry ADD COLUMN rc_aileron FLOAT",
+            ),
+            (
+                "rc_elevator",
+                "ALTER TABLE telemetry ADD COLUMN rc_elevator FLOAT",
+            ),
+            (
+                "rc_throttle",
+                "ALTER TABLE telemetry ADD COLUMN rc_throttle FLOAT",
+            ),
+            (
+                "rc_rudder",
+                "ALTER TABLE telemetry ADD COLUMN rc_rudder FLOAT",
+            ),
+            (
+                "is_photo",
+                "ALTER TABLE telemetry ADD COLUMN is_photo BOOLEAN",
+            ),
+            (
+                "is_video",
+                "ALTER TABLE telemetry ADD COLUMN is_video BOOLEAN",
+            ),
+            (
+                "cell_voltages",
+                "ALTER TABLE telemetry ADD COLUMN cell_voltages VARCHAR",
+            ),
+            (
+                "battery_full_capacity",
+                "ALTER TABLE telemetry ADD COLUMN battery_full_capacity FLOAT",
+            ),
+            (
+                "battery_remained_capacity",
+                "ALTER TABLE telemetry ADD COLUMN battery_remained_capacity FLOAT",
+            ),
         ];
 
         for (col_name, sql) in migrations {
@@ -508,7 +608,7 @@ impl Database {
     /// Migrate flight_tags table - only add missing columns
     fn migrate_flight_tags_table(conn: &Connection) -> Result<(), DatabaseError> {
         let columns = Self::get_table_columns(conn, "flight_tags")?;
-        
+
         if !columns.contains("tag_type") {
             log::info!("Migrating flight_tags table: adding tag_type column");
             conn.execute_batch(
@@ -518,13 +618,11 @@ impl Database {
                 "CREATE INDEX IF NOT EXISTS idx_flight_tags_type ON flight_tags(tag_type);",
             )?;
         }
-        
+
         // Update existing tags with NULL tag_type to 'auto' (migration backfill)
         // This handles rows created before the tag_type column existed
-        conn.execute_batch(
-            "UPDATE flight_tags SET tag_type = 'auto' WHERE tag_type IS NULL;",
-        )?;
-        
+        conn.execute_batch("UPDATE flight_tags SET tag_type = 'auto' WHERE tag_type IS NULL;")?;
+
         Ok(())
     }
 
@@ -566,7 +664,9 @@ impl Database {
             return Ok(());
         }
 
-        log::info!("Migrating flight_messages table: expanding primary key to include message text");
+        log::info!(
+            "Migrating flight_messages table: expanding primary key to include message text"
+        );
 
         conn.execute_batch(
             r#"
@@ -602,7 +702,7 @@ impl Database {
                 |row| row.get(0),
             )
             .unwrap_or(false);
-            
+
         if has_serial_number {
             log::info!("Migrating keychains table: replacing serial_number with file_hash PK");
             conn.execute_batch(
@@ -624,7 +724,7 @@ impl Database {
     /// for latitude/longitude coordinates. Only runs once.
     fn migrate_telemetry_types(conn: &Connection) -> Result<(), DatabaseError> {
         const MIGRATION_KEY: &str = "telemetry_float_migrated";
-        
+
         // Check if migration already completed using a marker in the settings table
         let already_migrated: bool = conn
             .query_row(
@@ -634,17 +734,17 @@ impl Database {
             )
             .map(|v| v == "true")
             .unwrap_or(false);
-        
+
         if already_migrated {
             log::debug!("Telemetry type migration already completed, skipping");
             return Ok(());
         }
-        
+
         // Check if telemetry table exists and has data
         let row_count: i64 = conn
             .query_row("SELECT COUNT(*) FROM telemetry", [], |row| row.get(0))
             .unwrap_or(0);
-        
+
         if row_count == 0 {
             // Empty table or new install - just mark as done
             log::debug!("Telemetry table empty, marking float migration as complete");
@@ -654,7 +754,7 @@ impl Database {
             )?;
             return Ok(());
         }
-        
+
         // Check if any DOUBLE columns exist (need migration)
         // Query column types from DuckDB's information schema
         let needs_migration: bool = conn
@@ -670,7 +770,7 @@ impl Database {
                 |row| row.get(0),
             )
             .unwrap_or(false);
-        
+
         if !needs_migration {
             log::debug!("Telemetry columns already using FLOAT types");
             conn.execute(
@@ -679,13 +779,13 @@ impl Database {
             )?;
             return Ok(());
         }
-        
+
         log::info!(
             "Migrating telemetry table types: DOUBLE -> FLOAT for {} rows (this may take a moment)...",
             row_count
         );
         let start = std::time::Instant::now();
-        
+
         // Recreate table with optimized types:
         // - DOUBLE preserved for latitude, longitude (need ~15 decimal precision for GPS)
         // - FLOAT for everything else (7 decimal precision is plenty for altitude, speed, etc.)
@@ -784,28 +884,31 @@ impl Database {
             COMMIT;
             "#,
         )?;
-        
+
         log::info!(
             "Telemetry type migration completed in {:.1}s for {} rows",
             start.elapsed().as_secs_f64(),
             row_count
         );
-        
+
         // Run VACUUM to reclaim space (must be outside transaction)
         log::info!("Running VACUUM to reclaim disk space...");
         let vacuum_start = std::time::Instant::now();
         if let Err(e) = conn.execute_batch("VACUUM;") {
             log::warn!("VACUUM failed (non-fatal): {}", e);
         } else {
-            log::info!("VACUUM completed in {:.1}s", vacuum_start.elapsed().as_secs_f64());
+            log::info!(
+                "VACUUM completed in {:.1}s",
+                vacuum_start.elapsed().as_secs_f64()
+            );
         }
-        
+
         // Mark migration as complete
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             params![MIGRATION_KEY, "true"],
         )?;
-        
+
         log::info!("Telemetry type migration marked as complete");
         Ok(())
     }
@@ -856,14 +959,19 @@ impl Database {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
 
-        if actual.iter().map(String::as_str).eq(expected.iter().copied()) {
+        if actual
+            .iter()
+            .map(String::as_str)
+            .eq(expected.iter().copied())
+        {
             return Ok(());
         }
 
-        log::warn!("Telemetry column order mismatch detected. Rebuilding table with correct schema.");
+        log::warn!(
+            "Telemetry column order mismatch detected. Rebuilding table with correct schema."
+        );
 
-        let existing: std::collections::HashSet<&str> =
-            actual.iter().map(|s| s.as_str()).collect();
+        let existing: std::collections::HashSet<&str> = actual.iter().map(|s| s.as_str()).collect();
 
         let select_list = expected
             .iter()
@@ -1011,9 +1119,10 @@ impl Database {
 
         for point in points {
             // Serialize cell_voltages to JSON string for storage
-            let cell_voltages_json: Option<String> = point.cell_voltages.as_ref().map(|v| {
-                serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string())
-            });
+            let cell_voltages_json: Option<String> = point
+                .cell_voltages
+                .as_ref()
+                .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "[]".to_string()));
             match appender.append_row(params![
                 flight_id,
                 point.timestamp_ms,
@@ -1142,22 +1251,35 @@ impl Database {
             }
         }
 
-        log::debug!("get_all_flights: {} rows in {:.1}ms", flights.len(), start.elapsed().as_secs_f64() * 1000.0);
+        log::debug!(
+            "get_all_flights: {} rows in {:.1}ms",
+            flights.len(),
+            start.elapsed().as_secs_f64() * 1000.0
+        );
         Ok(flights)
     }
 
     /// Helper: get all flight tags using an existing connection lock
-    fn get_all_flight_tags_with_conn(&self, conn: &Connection) -> Result<std::collections::HashMap<i64, Vec<FlightTag>>, DatabaseError> {
-        let mut stmt = conn.prepare(
-            "SELECT flight_id, tag, tag_type FROM flight_tags ORDER BY flight_id, tag",
-        )?;
-        let mut map: std::collections::HashMap<i64, Vec<FlightTag>> = std::collections::HashMap::new();
+    fn get_all_flight_tags_with_conn(
+        &self,
+        conn: &Connection,
+    ) -> Result<std::collections::HashMap<i64, Vec<FlightTag>>, DatabaseError> {
+        let mut stmt = conn
+            .prepare("SELECT flight_id, tag, tag_type FROM flight_tags ORDER BY flight_id, tag")?;
+        let mut map: std::collections::HashMap<i64, Vec<FlightTag>> =
+            std::collections::HashMap::new();
         let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })?;
         for row in rows {
             let (flight_id, tag, tag_type) = row?;
-            map.entry(flight_id).or_default().push(FlightTag { tag, tag_type });
+            map.entry(flight_id)
+                .or_default()
+                .push(FlightTag { tag, tag_type });
         }
         Ok(map)
     }
@@ -1166,8 +1288,9 @@ impl Database {
     pub fn get_flight_by_id(&self, flight_id: i64) -> Result<Flight, DatabaseError> {
         let conn = self.conn.lock().unwrap();
 
-        let mut flight = conn.query_row(
-            r#"
+        let mut flight = conn
+            .query_row(
+                r#"
             SELECT 
                 id, file_name, COALESCE(display_name, file_name) AS display_name,
                 file_hash, drone_model, drone_serial, aircraft_name, battery_serial,
@@ -1179,43 +1302,45 @@ impl Database {
             FROM flights
             WHERE id = ?
             "#,
-            params![flight_id],
-            |row| {
-                Ok(Flight {
-                    id: row.get(0)?,
-                    file_name: row.get(1)?,
-                    display_name: row.get(2)?,
-                    file_hash: row.get(3)?,
-                    drone_model: row.get(4)?,
-                    drone_serial: row.get(5)?,
-                    aircraft_name: row.get(6)?,
-                    battery_serial: row.get(7)?,
-                    cycle_count: row.get(20)?,
-                    start_time: row.get(8)?,
-                    duration_secs: row.get(9)?,
-                    total_distance: row.get(10)?,
-                    max_altitude: row.get(11)?,
-                    max_speed: row.get(12)?,
-                    home_lat: row.get(13)?,
-                    home_lon: row.get(14)?,
-                    point_count: row.get(15)?,
-                    photo_count: row.get(16)?,
-                    video_count: row.get(17)?,
-                    tags: Vec::new(),
-                    notes: row.get(18)?,
-                    color: row.get(19)?,
-                    rc_serial: row.get(21)?,
-                    battery_life: row.get(22)?,
-                })
-            },
-        )
-        .map_err(|e| match e {
-            duckdb::Error::QueryReturnedNoRows => DatabaseError::FlightNotFound(flight_id),
-            other => DatabaseError::DuckDb(other),
-        })?;
+                params![flight_id],
+                |row| {
+                    Ok(Flight {
+                        id: row.get(0)?,
+                        file_name: row.get(1)?,
+                        display_name: row.get(2)?,
+                        file_hash: row.get(3)?,
+                        drone_model: row.get(4)?,
+                        drone_serial: row.get(5)?,
+                        aircraft_name: row.get(6)?,
+                        battery_serial: row.get(7)?,
+                        cycle_count: row.get(20)?,
+                        start_time: row.get(8)?,
+                        duration_secs: row.get(9)?,
+                        total_distance: row.get(10)?,
+                        max_altitude: row.get(11)?,
+                        max_speed: row.get(12)?,
+                        home_lat: row.get(13)?,
+                        home_lon: row.get(14)?,
+                        point_count: row.get(15)?,
+                        photo_count: row.get(16)?,
+                        video_count: row.get(17)?,
+                        tags: Vec::new(),
+                        notes: row.get(18)?,
+                        color: row.get(19)?,
+                        rc_serial: row.get(21)?,
+                        battery_life: row.get(22)?,
+                    })
+                },
+            )
+            .map_err(|e| match e {
+                duckdb::Error::QueryReturnedNoRows => DatabaseError::FlightNotFound(flight_id),
+                other => DatabaseError::DuckDb(other),
+            })?;
 
         // Load tags for this flight
-        if let Ok(mut stmt) = conn.prepare("SELECT tag, tag_type FROM flight_tags WHERE flight_id = ? ORDER BY tag") {
+        if let Ok(mut stmt) =
+            conn.prepare("SELECT tag, tag_type FROM flight_tags WHERE flight_id = ? ORDER BY tag")
+        {
             if let Ok(tags) = stmt
                 .query_map(params![flight_id], |row| {
                     Ok(FlightTag {
@@ -1252,7 +1377,10 @@ impl Database {
 
         // None = return all raw data (for export); Some(n) = downsample for display
         if max_points.is_none() {
-            log::debug!("Returning all raw telemetry points for flight {} (export mode)", flight_id);
+            log::debug!(
+                "Returning all raw telemetry points for flight {} (export mode)",
+                flight_id
+            );
             return self.query_raw_telemetry(&conn, flight_id);
         }
 
@@ -1385,10 +1513,9 @@ impl Database {
             .query_map(params![flight_id], |row| {
                 // Parse cell_voltages from JSON string
                 let cell_voltages_json: Option<String> = row.get(13)?;
-                let cell_voltages = cell_voltages_json.and_then(|s| {
-                    serde_json::from_str::<Vec<f64>>(&s).ok()
-                });
-                
+                let cell_voltages =
+                    cell_voltages_json.and_then(|s| serde_json::from_str::<Vec<f64>>(&s).ok());
+
                 Ok(TelemetryRecord {
                     timestamp_ms: row.get(0)?,
                     latitude: row.get(1)?,
@@ -1511,10 +1638,9 @@ impl Database {
             .query_map(params![bucket_size_ms, bucket_size_ms, flight_id], |row| {
                 // Parse cell_voltages from JSON string
                 let cell_voltages_json: Option<String> = row.get(13)?;
-                let cell_voltages = cell_voltages_json.and_then(|s| {
-                    serde_json::from_str::<Vec<f64>>(&s).ok()
-                });
-                
+                let cell_voltages =
+                    cell_voltages_json.and_then(|s| serde_json::from_str::<Vec<f64>>(&s).ok());
+
                 Ok(TelemetryRecord {
                     timestamp_ms: row.get(0)?,
                     latitude: row.get(1)?,
@@ -1578,7 +1704,11 @@ impl Database {
         );
         conn.execute("DELETE FROM flights WHERE id = ?", params![flight_id])?;
 
-        log::info!("Deleted flight {} in {:.1}ms", flight_id, start.elapsed().as_secs_f64() * 1000.0);
+        log::info!(
+            "Deleted flight {} in {:.1}ms",
+            flight_id,
+            start.elapsed().as_secs_f64() * 1000.0
+        );
         Ok(())
     }
 
@@ -1592,7 +1722,10 @@ impl Database {
         let _ = conn.execute("DELETE FROM flight_messages", params![]);
         conn.execute("DELETE FROM flights", params![])?;
 
-        log::info!("Deleted all flights and telemetry in {:.1}ms", start.elapsed().as_secs_f64() * 1000.0);
+        log::info!(
+            "Deleted all flights and telemetry in {:.1}ms",
+            start.elapsed().as_secs_f64() * 1000.0
+        );
         Ok(())
     }
 
@@ -1629,9 +1762,16 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         // Basic aggregate stats
-        let (total_flights, total_distance, total_duration, total_points, total_photos, total_videos, max_altitude): (i64, f64, f64, i64, i64, i64, f64) =
-            conn.query_row(
-                r#"
+        let (
+            total_flights,
+            total_distance,
+            total_duration,
+            total_points,
+            total_photos,
+            total_videos,
+            max_altitude,
+        ): (i64, f64, f64, i64, i64, i64, f64) = conn.query_row(
+            r#"
                 SELECT
                     COUNT(*)::BIGINT,
                     COALESCE(SUM(total_distance), 0)::DOUBLE,
@@ -1642,9 +1782,19 @@ impl Database {
                     COALESCE(MAX(max_altitude), 0)::DOUBLE
                 FROM flights
                 "#,
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
-            )?;
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            },
+        )?;
 
         // Battery usage with total duration and max cycle count
         let mut stmt = conn.prepare(
@@ -1715,7 +1865,8 @@ impl Database {
         )?;
 
         let cutoff_date = Utc::now().date_naive() - Duration::days(365);
-        let mut date_counts: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+        let mut date_counts: std::collections::BTreeMap<String, i64> =
+            std::collections::BTreeMap::new();
 
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         for row in rows {
@@ -1827,9 +1978,17 @@ impl Database {
         let battery_health_points = stmt
             .query_map([], |row| {
                 let duration_secs: f64 = row.get(3)?;
-                let duration_mins = if duration_secs > 0.0 { duration_secs / 60.0 } else { 0.0 };
+                let duration_mins = if duration_secs > 0.0 {
+                    duration_secs / 60.0
+                } else {
+                    0.0
+                };
                 let delta_percent: f64 = row.get(4)?;
-                let rate_per_min = if duration_mins > 0.0 { delta_percent / duration_mins } else { 0.0 };
+                let rate_per_min = if duration_mins > 0.0 {
+                    delta_percent / duration_mins
+                } else {
+                    0.0
+                };
 
                 Ok(BatteryHealthPoint {
                     flight_id: row.get(0)?,
@@ -1850,7 +2009,9 @@ impl Database {
 
         log::debug!(
             "get_overview_stats: {} flights, {} batteries, {} drones in {:.1}ms",
-            total_flights, batteries_used.len(), drones_used.len(),
+            total_flights,
+            batteries_used.len(),
+            drones_used.len(),
             start.elapsed().as_secs_f64() * 1000.0
         );
 
@@ -1873,7 +2034,11 @@ impl Database {
     }
 
     /// Update the display name for a flight and persist to customizations overlay
-    pub fn update_flight_name(&self, flight_id: i64, display_name: &str) -> Result<(), DatabaseError> {
+    pub fn update_flight_name(
+        &self,
+        flight_id: i64,
+        display_name: &str,
+    ) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
@@ -1883,12 +2048,20 @@ impl Database {
         // Write-through to customizations overlay (keyed by file_hash)
         Self::save_customization_field(&conn, flight_id, "display_name", Some(display_name))?;
 
-        log::debug!("Updated flight {} display name to '{}'", flight_id, display_name);
+        log::debug!(
+            "Updated flight {} display name to '{}'",
+            flight_id,
+            display_name
+        );
         Ok(())
     }
 
     /// Update the notes for a flight and persist to customizations overlay
-    pub fn update_flight_notes(&self, flight_id: i64, notes: Option<&str>) -> Result<(), DatabaseError> {
+    pub fn update_flight_notes(
+        &self,
+        flight_id: i64,
+        notes: Option<&str>,
+    ) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
@@ -1945,9 +2118,8 @@ impl Database {
     /// Get all tags for a specific flight
     pub fn get_flight_tags(&self, flight_id: i64) -> Result<Vec<FlightTag>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT tag, tag_type FROM flight_tags WHERE flight_id = ? ORDER BY tag",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT tag, tag_type FROM flight_tags WHERE flight_id = ? ORDER BY tag")?;
         let tags = stmt
             .query_map(params![flight_id], |row| {
                 Ok(FlightTag {
@@ -1992,9 +2164,7 @@ impl Database {
     /// Get all unique tags across all flights
     pub fn get_all_unique_tags(&self) -> Result<Vec<String>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT tag FROM flight_tags ORDER BY tag",
-        )?;
+        let mut stmt = conn.prepare("SELECT DISTINCT tag FROM flight_tags ORDER BY tag")?;
         let tags = stmt
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2002,7 +2172,11 @@ impl Database {
     }
 
     /// Replace all auto tags for a flight with new ones (keeps manual tags)
-    pub fn replace_auto_tags(&self, flight_id: i64, new_tags: &[String]) -> Result<(), DatabaseError> {
+    pub fn replace_auto_tags(
+        &self,
+        flight_id: i64,
+        new_tags: &[String],
+    ) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
         // Delete existing auto tags
         conn.execute(
@@ -2027,10 +2201,7 @@ impl Database {
     /// Returns the number of auto tags removed
     pub fn remove_all_auto_tags(&self) -> Result<usize, DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        let removed = conn.execute(
-            "DELETE FROM flight_tags WHERE tag_type = 'auto'",
-            [],
-        )?;
+        let removed = conn.execute("DELETE FROM flight_tags WHERE tag_type = 'auto'", [])?;
         Ok(removed)
     }
 
@@ -2049,7 +2220,11 @@ impl Database {
     // ================================================================
 
     /// Insert flight messages (tips and warnings) for a flight
-    pub fn insert_flight_messages(&self, flight_id: i64, messages: &[FlightMessage]) -> Result<(), DatabaseError> {
+    pub fn insert_flight_messages(
+        &self,
+        flight_id: i64,
+        messages: &[FlightMessage],
+    ) -> Result<(), DatabaseError> {
         if messages.is_empty() {
             return Ok(());
         }
@@ -2068,7 +2243,12 @@ impl Database {
             {
                 let mut appender = conn.appender("flight_messages_staging")?;
                 for msg in messages {
-                    appender.append_row(params![flight_id, msg.timestamp_ms, msg.message_type, msg.message])?;
+                    appender.append_row(params![
+                        flight_id,
+                        msg.timestamp_ms,
+                        msg.message_type,
+                        msg.message
+                    ])?;
                 }
                 appender.flush()?;
             }
@@ -2081,7 +2261,11 @@ impl Database {
         })();
         let _ = conn.execute("DELETE FROM flight_messages_staging", params![]);
         result?;
-        log::debug!("Inserted {} messages for flight {}", messages.len(), flight_id);
+        log::debug!(
+            "Inserted {} messages for flight {}",
+            messages.len(),
+            flight_id
+        );
         Ok(())
     }
 
@@ -2203,7 +2387,15 @@ impl Database {
     pub fn get_flight_customizations(
         &self,
         file_hash: &str,
-    ) -> Result<Option<(Option<String>, Option<String>, Option<String>, Option<String>)>, DatabaseError> {
+    ) -> Result<
+        Option<(
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+        DatabaseError,
+    > {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
@@ -2225,7 +2417,11 @@ impl Database {
     /// Apply any previously saved customizations to a newly imported flight.
     /// Restores display_name, notes, color, and manual tags from the overlay table.
     /// Returns true if customizations were applied, false otherwise.
-    pub fn apply_saved_customizations(&self, flight_id: i64, file_hash: &str) -> Result<bool, DatabaseError> {
+    pub fn apply_saved_customizations(
+        &self,
+        flight_id: i64,
+        file_hash: &str,
+    ) -> Result<bool, DatabaseError> {
         let customizations = self.get_flight_customizations(file_hash)?;
         let (display_name, notes, color, manual_tags_json) = match customizations {
             Some(c) => c,
@@ -2272,7 +2468,11 @@ impl Database {
             || manual_tags_json.is_some();
 
         if had_customizations {
-            log::info!("Restored saved customizations for flight {} (file_hash: {})", flight_id, file_hash);
+            log::info!(
+                "Restored saved customizations for flight {} (file_hash: {})",
+                flight_id,
+                file_hash
+            );
         }
         Ok(had_customizations)
     }
@@ -2282,30 +2482,47 @@ impl Database {
     // ========================================================================
 
     /// Set a custom display name for a battery or aircraft
-    pub fn set_equipment_name(&self, serial: &str, equipment_type: &str, display_name: &str) -> Result<(), DatabaseError> {
+    pub fn set_equipment_name(
+        &self,
+        serial: &str,
+        equipment_type: &str,
+        display_name: &str,
+    ) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
         let serial_upper = serial.trim().to_uppercase();
-        
+
         if display_name.trim().is_empty() {
             // Empty name = delete the mapping
             conn.execute(
                 "DELETE FROM equipment_names WHERE serial = ? AND equipment_type = ?",
                 params![serial_upper, equipment_type],
             )?;
-            log::info!("Removed {} name for serial {}", equipment_type, serial_upper);
+            log::info!(
+                "Removed {} name for serial {}",
+                equipment_type,
+                serial_upper
+            );
         } else {
             conn.execute(
                 "INSERT OR REPLACE INTO equipment_names (serial, equipment_type, display_name, updated_at) 
                  VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
                 params![serial_upper, equipment_type, display_name.trim()],
             )?;
-            log::info!("Set {} name for serial {}: {}", equipment_type, serial_upper, display_name.trim());
+            log::info!(
+                "Set {} name for serial {}: {}",
+                equipment_type,
+                serial_upper,
+                display_name.trim()
+            );
         }
         Ok(())
     }
 
     /// Get all equipment names of a given type (battery or aircraft)
-    pub fn get_equipment_names(&self, equipment_type: &str) -> Result<Vec<(String, String)>, DatabaseError> {
+    pub fn get_equipment_names(
+        &self,
+        equipment_type: &str,
+    ) -> Result<Vec<(String, String)>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT serial, display_name FROM equipment_names WHERE equipment_type = ? ORDER BY serial"
@@ -2319,7 +2536,9 @@ impl Database {
     }
 
     /// Get all equipment names (both batteries and aircraft) as a map
-    pub fn get_all_equipment_names(&self) -> Result<(Vec<(String, String)>, Vec<(String, String)>), DatabaseError> {
+    pub fn get_all_equipment_names(
+        &self,
+    ) -> Result<(Vec<(String, String)>, Vec<(String, String)>), DatabaseError> {
         let battery_names = self.get_equipment_names("battery")?;
         let aircraft_names = self.get_equipment_names("aircraft")?;
         Ok((battery_names, aircraft_names))
@@ -2330,11 +2549,13 @@ impl Database {
     pub fn is_file_imported(&self, file_hash: &str) -> Result<Option<String>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
 
-        let result: Option<String> = conn.query_row(
-            "SELECT COALESCE(display_name, file_name) FROM flights WHERE file_hash = ? LIMIT 1",
-            params![file_hash],
-            |row| row.get(0),
-        ).optional()?;
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT COALESCE(display_name, file_name) FROM flights WHERE file_hash = ? LIMIT 1",
+                params![file_hash],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         Ok(result)
     }
@@ -2345,9 +2566,10 @@ impl Database {
     pub fn get_all_file_hashes(&self) -> Result<Vec<String>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT file_hash FROM flights WHERE file_hash IS NOT NULL AND file_hash != ''"
+            "SELECT file_hash FROM flights WHERE file_hash IS NOT NULL AND file_hash != ''",
         )?;
-        let hashes = stmt.query_map([], |row| row.get(0))?
+        let hashes = stmt
+            .query_map([], |row| row.get(0))?
             .collect::<Result<Vec<String>, _>>()?;
         Ok(hashes)
     }
@@ -2375,7 +2597,10 @@ impl Database {
         }
 
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM sync_blacklist WHERE file_hash = ?", params![hash])?;
+        conn.execute(
+            "DELETE FROM sync_blacklist WHERE file_hash = ?",
+            params![hash],
+        )?;
         Ok(())
     }
 
@@ -2389,7 +2614,8 @@ impl Database {
     /// Get all blacklisted file hashes.
     pub fn get_sync_blacklist_hashes(&self) -> Result<Vec<String>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT file_hash FROM sync_blacklist ORDER BY created_at DESC")?;
+        let mut stmt =
+            conn.prepare("SELECT file_hash FROM sync_blacklist ORDER BY created_at DESC")?;
         let hashes = stmt
             .query_map([], |row| row.get(0))?
             .collect::<Result<Vec<String>, _>>()?;
@@ -2451,7 +2677,8 @@ impl Database {
                     "#,
                     params![drone, b, time.to_rfc3339()],
                     |row| row.get(0),
-                ).optional()?
+                )
+                .optional()?
             }
             _ => {
                 // Partial check: drone + start_time only (battery unknown)
@@ -2467,7 +2694,8 @@ impl Database {
                     "#,
                     params![drone, time.to_rfc3339()],
                     |row| row.get(0),
-                ).optional()?
+                )
+                .optional()?
             }
         };
 
@@ -2541,14 +2769,20 @@ impl Database {
             [],
         )?;
         total_removed += signature_duplicates;
-        log::info!("Removed {} signature-based duplicates", signature_duplicates);
+        log::info!(
+            "Removed {} signature-based duplicates",
+            signature_duplicates
+        );
 
         // Clean up orphaned telemetry data
         let orphaned_telemetry = conn.execute(
             "DELETE FROM telemetry WHERE flight_id NOT IN (SELECT id FROM flights)",
             [],
         )?;
-        log::info!("Cleaned up {} orphaned telemetry records", orphaned_telemetry);
+        log::info!(
+            "Cleaned up {} orphaned telemetry records",
+            orphaned_telemetry
+        );
 
         // Clean up orphaned tags
         let orphaned_tags = conn.execute(
@@ -2569,10 +2803,14 @@ impl Database {
     /// Retrieve cached keychain for a log file by its SHA-256 hash.
     /// Returns the deserialized keychain data if found, or `None` if not cached
     /// or if deserialization fails (corrupt cache row is treated as a miss).
-    pub fn get_cached_keychain(&self, file_hash: &str) -> Result<Option<Vec<Vec<dji_log_parser::keychain::KeychainFeaturePoint>>>, DatabaseError> {
+    pub fn get_cached_keychain(
+        &self,
+        file_hash: &str,
+    ) -> Result<Option<Vec<Vec<dji_log_parser::keychain::KeychainFeaturePoint>>>, DatabaseError>
+    {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT encryption_key FROM keychains WHERE file_hash = ?")?;
-        
+
         let mut rows = stmt.query(params![file_hash])?;
         if let Some(row) = rows.next()? {
             let json_str: String = row.get(0)?;
@@ -2582,7 +2820,11 @@ impl Database {
                     Ok(Some(keychains))
                 }
                 Err(e) => {
-                    log::warn!("Failed to deserialize cached keychain for file_hash: {}: {}", file_hash, e);
+                    log::warn!(
+                        "Failed to deserialize cached keychain for file_hash: {}: {}",
+                        file_hash,
+                        e
+                    );
                     Ok(None)
                 }
             }
@@ -2593,15 +2835,24 @@ impl Database {
 
     /// Save fetched keychain data to the local cache, keyed by the log file's SHA-256 hash.
     /// The keychain is serialized as JSON. Overwrites any existing entry for the same hash.
-    pub fn save_cached_keychain(&self, file_hash: &str, keychains: &[Vec<dji_log_parser::keychain::KeychainFeaturePoint>]) -> Result<(), DatabaseError> {
+    pub fn save_cached_keychain(
+        &self,
+        file_hash: &str,
+        keychains: &[Vec<dji_log_parser::keychain::KeychainFeaturePoint>],
+    ) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        let json_str = serde_json::to_string(keychains).map_err(|e| DatabaseError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())))?;
-        
+        let json_str = serde_json::to_string(keychains).map_err(|e| {
+            DatabaseError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string(),
+            ))
+        })?;
+
         conn.execute(
             "INSERT OR REPLACE INTO keychains (file_hash, encryption_key) VALUES (?, ?)",
             params![file_hash, json_str],
         )?;
-        
+
         log::debug!("Saved keychain to cache for file_hash: {}", file_hash);
         Ok(())
     }
@@ -2609,13 +2860,13 @@ impl Database {
     /// Get a setting value by key
     pub fn get_setting(&self, key: &str) -> Result<Option<String>, DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        
+
         let result: Result<String, _> = conn.query_row(
             "SELECT value FROM settings WHERE key = ?",
             params![key],
             |row| row.get(0),
         );
-        
+
         match result {
             Ok(value) => Ok(Some(value)),
             Err(duckdb::Error::QueryReturnedNoRows) => Ok(None),
@@ -2626,13 +2877,13 @@ impl Database {
     /// Set a setting value (insert or update)
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), DatabaseError> {
         let conn = self.conn.lock().unwrap();
-        
+
         // DuckDB doesn't support CURRENT_TIMESTAMP in ON CONFLICT, so use INSERT OR REPLACE
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             params![key, value],
         )?;
-        
+
         Ok(())
     }
 
@@ -2641,7 +2892,7 @@ impl Database {
     /// After running, it sets a flag so it won't run again.
     fn run_startup_deduplication(&self) {
         const SETTING_KEY: &str = "duplicate_checked";
-        
+
         // Check if we've already run deduplication
         match self.get_setting(SETTING_KEY) {
             Ok(Some(value)) if value == "true" => {
@@ -2652,12 +2903,15 @@ impl Database {
                 // Not set or not "true", run deduplication
             }
             Err(e) => {
-                log::warn!("Failed to check dedup setting: {}, proceeding with deduplication", e);
+                log::warn!(
+                    "Failed to check dedup setting: {}, proceeding with deduplication",
+                    e
+                );
             }
         }
 
         log::info!("Running one-time startup deduplication for existing flights...");
-        
+
         match self.deduplicate_flights() {
             Ok(count) => {
                 if count > 0 {
@@ -2693,7 +2947,10 @@ impl Database {
             }
             Ok(_) => {}
             Err(e) => {
-                log::warn!("Failed to check customizations backfill setting: {}, proceeding", e);
+                log::warn!(
+                    "Failed to check customizations backfill setting: {}, proceeding",
+                    e
+                );
             }
         }
 
@@ -2725,7 +2982,10 @@ impl Database {
         );
 
         if let Err(e) = result {
-            log::error!("Failed to backfill flight customizations (display_name/notes/color): {}", e);
+            log::error!(
+                "Failed to backfill flight customizations (display_name/notes/color): {}",
+                e
+            );
             return;
         }
 
@@ -2761,7 +3021,10 @@ impl Database {
         );
 
         if let Err(e) = tag_result {
-            log::error!("Failed to backfill flight customizations (manual_tags): {}", e);
+            log::error!(
+                "Failed to backfill flight customizations (manual_tags): {}",
+                e
+            );
             return;
         }
 
@@ -2780,11 +3043,11 @@ impl Database {
 
         // Count how many were backfilled
         if let Ok(conn) = self.conn.lock() {
-            if let Ok(count) = conn.query_row(
-                "SELECT COUNT(*) FROM flight_customizations",
-                [],
-                |row| row.get::<_, i64>(0),
-            ) {
+            if let Ok(count) =
+                conn.query_row("SELECT COUNT(*) FROM flight_customizations", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+            {
                 log::info!("Flight customizations backfill complete: {} entries", count);
             }
         }
@@ -2818,7 +3081,8 @@ impl Database {
         on_progress(5, "Preparing backup workspace");
 
         // Create a temp directory for the Parquet exports
-        let temp_dir = std::env::temp_dir().join(format!("dji-logbook-backup-{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("dji-logbook-backup-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp_dir)?;
 
         let conn = self.conn.lock().unwrap();
@@ -2878,16 +3142,26 @@ impl Database {
         drop(conn); // release the lock while we tar
 
         // Pack the Parquet files into a gzip-compressed tar archive
-    on_progress(65, "Packaging backup archive");
+        on_progress(65, "Packaging backup archive");
         let dest_file = fs::File::create(dest_path)?;
         let gz = flate2::write::GzEncoder::new(dest_file, flate2::Compression::fast());
         let mut tar = tar::Builder::new(gz);
 
-        for name in &["flights.parquet", "telemetry.parquet", "keychains.parquet", "flight_tags.parquet", "flight_messages.parquet", "equipment_names.parquet", "flight_customizations.parquet", "settings.parquet"] {
+        for name in &[
+            "flights.parquet",
+            "telemetry.parquet",
+            "keychains.parquet",
+            "flight_tags.parquet",
+            "flight_messages.parquet",
+            "equipment_names.parquet",
+            "flight_customizations.parquet",
+            "settings.parquet",
+        ] {
             let file_path = temp_dir.join(name);
             if file_path.exists() {
-                tar.append_path_with_name(&file_path, name)
-                    .map_err(|e| DatabaseError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+                tar.append_path_with_name(&file_path, name).map_err(|e| {
+                    DatabaseError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                })?;
             }
         }
 
@@ -2933,15 +3207,20 @@ impl Database {
         on_progress(5, "Preparing restore workspace");
 
         // Extract the tar.gz archive to a temp directory
-        let temp_dir = std::env::temp_dir().join(format!("dji-logbook-restore-{}", uuid::Uuid::new_v4()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("dji-logbook-restore-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp_dir)?;
 
         let file = fs::File::open(src_path)?;
         let gz = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(gz);
         on_progress(15, "Extracting backup archive");
-        archive.unpack(&temp_dir)
-            .map_err(|e| DatabaseError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to extract backup archive: {}", e))))?;
+        archive.unpack(&temp_dir).map_err(|e| {
+            DatabaseError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to extract backup archive: {}", e),
+            ))
+        })?;
 
         let flights_path = temp_dir.join("flights.parquet");
         let telemetry_path = temp_dir.join("telemetry.parquet");
@@ -3005,7 +3284,10 @@ impl Database {
         }
 
         let flights_restored: i64 = conn.query_row(
-            &format!("SELECT COUNT(*) FROM read_parquet('{}')", flights_path.to_string_lossy()),
+            &format!(
+                "SELECT COUNT(*) FROM read_parquet('{}')",
+                flights_path.to_string_lossy()
+            ),
             [],
             |row| row.get(0),
         )?;
@@ -3120,10 +3402,7 @@ impl Database {
         let _ = fs::remove_dir_all(&temp_dir);
 
         let elapsed = start.elapsed().as_secs_f64();
-        let msg = format!(
-            "Restored {} flights in {:.1}s",
-            flights_restored, elapsed
-        );
+        let msg = format!("Restored {} flights in {:.1}s", flights_restored, elapsed);
         on_progress(100, "Restore complete");
         log::info!("{}", msg);
         Ok(msg)
@@ -3145,8 +3424,13 @@ pub fn validate_profile_name(name: &str) -> Result<(), String> {
     if name.len() > 50 {
         return Err("Profile name too long (max 50 characters)".to_string());
     }
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return Err("Profile name can only contain letters, numbers, hyphens, and underscores".to_string());
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(
+            "Profile name can only contain letters, numbers, hyphens, and underscores".to_string(),
+        );
     }
     Ok(())
 }
@@ -3160,7 +3444,10 @@ pub fn list_profiles(data_dir: &std::path::Path) -> Vec<String> {
             let name = entry.file_name().to_string_lossy().to_string();
             // Match flights_{profile}.db but not .db.wal, .db.bak, etc.
             if name.starts_with("flights_") && name.ends_with(".db") && !name.contains(".db.") {
-                if let Some(profile) = name.strip_prefix("flights_").and_then(|s| s.strip_suffix(".db")) {
+                if let Some(profile) = name
+                    .strip_prefix("flights_")
+                    .and_then(|s| s.strip_suffix(".db"))
+                {
                     if !profile.is_empty() && !profiles.contains(&profile.to_string()) {
                         profiles.push(profile.to_string());
                     }
@@ -3246,7 +3533,10 @@ pub fn profile_exists(data_dir: &std::path::Path, profile: &str) -> bool {
     if let Ok(entries) = std::fs::read_dir(data_dir) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_lowercase();
-            if let Some(existing) = name.strip_prefix("flights_").and_then(|s| s.strip_suffix(".db")) {
+            if let Some(existing) = name
+                .strip_prefix("flights_")
+                .and_then(|s| s.strip_suffix(".db"))
+            {
                 if !existing.contains('.') && existing == lower {
                     return true;
                 }
@@ -3262,6 +3552,9 @@ pub fn delete_profile(data_dir: &std::path::Path, profile: &str) -> Result<(), S
         return Err("Cannot delete the default profile".to_string());
     }
 
+    validate_profile_name(profile)?;
+    crate::chat::cancel_profile(data_dir, profile);
+    crate::chat::storage::remove(data_dir, profile)?;
     let db_path = data_dir.join(format!("flights_{}.db", profile));
     if db_path.exists() {
         fs::remove_file(&db_path)
@@ -3295,7 +3588,6 @@ pub fn delete_profile(data_dir: &std::path::Path, profile: &str) -> Result<(), S
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3326,7 +3618,11 @@ mod tests {
             .map(|e| e.file_name().to_string_lossy().to_string())
             .filter(|n| n.contains(".bak."))
             .collect();
-        assert!(leftovers.is_empty(), "database was moved aside: {:?}", leftovers);
+        assert!(
+            leftovers.is_empty(),
+            "database was moved aside: {:?}",
+            leftovers
+        );
         drop(first);
     }
 

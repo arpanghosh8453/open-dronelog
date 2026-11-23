@@ -4,6 +4,7 @@
  */
 
 import { useState, forwardRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Extra classes on the outer wrapper (defaults to "relative") */
@@ -12,6 +13,7 @@ interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
 
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ wrapperClassName = '', className = '', ...rest }, ref) => {
+    const { t } = useTranslation();
     const [visible, setVisible] = useState(false);
 
     return (
@@ -27,7 +29,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           tabIndex={-1}
           onClick={() => setVisible((v) => !v)}
           className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-0.5"
-          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-label={t(visible ? 'common.hidePassword' : 'common.showPassword')}
         >
           {visible ? (
             /* Eye-off icon */

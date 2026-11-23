@@ -1,5 +1,5 @@
 {
-  "sourceFingerprint": "604bc6bff425b40da0b8072145ff9ecbc900e2f8805f13697018d247401384ac",
+  "sourceFingerprint": "72af7b48b16b3d820b6b399ab73ad03b609a7c64251adf8dc649f3f929106625",
   "sourceFile": "src-tauri/src/server.rs",
   "routes": [
     {
@@ -293,14 +293,24 @@
       "handler": "remove_supporter_badge"
     },
     {
-      "path": "/api/supporter/donation",
-      "method": "GET",
-      "handler": "get_donation_acknowledged"
+      "path": "/api/chat/operation",
+      "method": "POST",
+      "handler": "operation"
     },
     {
-      "path": "/api/supporter/donation",
+      "path": "/api/chat/conversations",
+      "method": "GET",
+      "handler": "conversations"
+    },
+    {
+      "path": "/api/chat/send",
       "method": "POST",
-      "handler": "set_donation_acknowledged"
+      "handler": "send"
+    },
+    {
+      "path": "/api/chat/cancel",
+      "method": "POST",
+      "handler": "cancel"
     }
   ]
 }

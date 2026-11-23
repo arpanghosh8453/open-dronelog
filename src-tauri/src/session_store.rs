@@ -76,7 +76,10 @@ impl SessionStore {
             profile: profile.to_string(),
             created: Instant::now(),
         };
-        self.sessions.write().unwrap().insert(token.clone(), session);
+        self.sessions
+            .write()
+            .unwrap()
+            .insert(token.clone(), session);
         // Clear failure count on successful login
         self.failures.write().unwrap().remove(profile);
         token
@@ -119,10 +122,12 @@ impl SessionStore {
     /// is now locked out.
     pub fn record_failure(&self, profile: &str) -> bool {
         let mut failures = self.failures.write().unwrap();
-        let rec = failures.entry(profile.to_string()).or_insert(FailureRecord {
-            count: 0,
-            last_attempt: Instant::now(),
-        });
+        let rec = failures
+            .entry(profile.to_string())
+            .or_insert(FailureRecord {
+                count: 0,
+                last_attempt: Instant::now(),
+            });
         // If the lockout window has passed, reset the counter
         if rec.last_attempt.elapsed() > LOCKOUT_DURATION {
             rec.count = 0;
@@ -136,9 +141,7 @@ impl SessionStore {
     pub fn is_locked_out(&self, profile: &str) -> bool {
         let failures = self.failures.read().unwrap();
         match failures.get(profile) {
-            Some(rec) if rec.count >= MAX_FAILURES => {
-                rec.last_attempt.elapsed() < LOCKOUT_DURATION
-            }
+            Some(rec) if rec.count >= MAX_FAILURES => rec.last_attempt.elapsed() < LOCKOUT_DURATION,
             _ => false,
         }
     }

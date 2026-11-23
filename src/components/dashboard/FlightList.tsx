@@ -220,7 +220,7 @@ export function FlightList({
   onSelectFlight?: (flightId: number) => void;
   onHighlightFlight?: (flightId: number | null) => void;
   onTopFlightChange?: (flightId: number | null) => void;
-  activeView?: 'flights' | 'overview';
+  activeView?: 'flights' | 'overview' | 'chat';
   onFiltersExpanded?: () => void;
 } = {}) {
   const renderGlobalOverlay = (content: React.ReactNode) => {

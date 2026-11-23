@@ -57,31 +57,16 @@ function parseCargoDependencies(cargoToml) {
 
 function parseRoutes(serverRs) {
   const routes = [];
-  const lines = serverRs.split(/\r?\n/);
-  let inRouterBlock = false;
-
-  for (const line of lines) {
-    if (line.includes('Router::new()')) {
-      inRouterBlock = true;
-      continue;
-    }
-    if (inRouterBlock && line.includes('.layer(cors)')) {
-      break;
-    }
-    if (!inRouterBlock) continue;
-
-    const routeMatch = line.match(/\.route\("([^"]+)",\s*(.+)\)/);
-    if (!routeMatch) continue;
-
-    const [, routePath, expr] = routeMatch;
-    const methodMatches = [...expr.matchAll(/\b(get|post|put|delete|patch)\s*\(\s*([a-zA-Z0-9_]+)/g)];
-
-    for (const match of methodMatches) {
-      routes.push({
-        path: routePath,
-        method: match[1].toUpperCase(),
-        handler: match[2],
-      });
+  // rustfmt splits longer route declarations across lines. Parse the whole router chain
+  // so the generated API inventory does not silently lose those endpoints.
+  const start = serverRs.indexOf('Router::new()');
+  if (start < 0) return routes;
+  const end = serverRs.indexOf('.layer(cors)', start);
+  const block = serverRs.slice(start, end < 0 ? undefined : end);
+  const declarations = block.matchAll(/\.route\(\s*"([^"]+)"\s*,([\s\S]*?)(?=\.route\(|\.layer\(|$)/g);
+  for (const [, routePath, expr] of declarations) {
+    for (const match of expr.matchAll(/\b(get|post|put|delete|patch)\s*\(\s*([a-zA-Z0-9_]+)/g)) {
+      routes.push({ path: routePath, method: match[1].toUpperCase(), handler: match[2] });
     }
   }
 
@@ -213,6 +198,7 @@ function run() {
   const packageJson = readJson('package.json');
   const cargoToml = readText('src-tauri/Cargo.toml');
   const serverRs = readText('src-tauri/src/server.rs');
+  const chatWebRs = readText('src-tauri/src/chat/web.rs');
   const apiTs = readText('src/lib/api.ts');
   const databaseRs = readText('src-tauri/src/database.rs');
   const readme = readText('README.md');
@@ -226,7 +212,7 @@ function run() {
   const fingerprints = {
     packageJson: hashText(JSON.stringify(packageJson)),
     cargoToml: hashText(cargoToml),
-    serverRs: hashText(serverRs),
+    serverRs: hashText(`${serverRs}\n${chatWebRs}`),
     apiTs: hashText(apiTs),
     databaseRs: hashText(databaseRs),
     readmeEnvVars: hashText(JSON.stringify(readmeEnvVars)),
@@ -248,7 +234,7 @@ function run() {
     dependencies: parseCargoDependencies(cargoToml),
   };
 
-  const routes = parseRoutes(serverRs);
+  const routes = [...parseRoutes(serverRs), ...parseRoutes(chatWebRs)];
   const apiRoutes = {
     sourceFingerprint: fingerprints.serverRs,
     sourceFile: 'src-tauri/src/server.rs',

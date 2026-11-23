@@ -1,5 +1,5 @@
 {
-  "sourceFingerprint": "c91cf79982e97f75e1edc611457b51faaa92404c02bac89de1a32f943894b7e9",
+  "sourceFingerprint": "4110c68a66a89b13922b3b2cb7db7e991c9d7b0e42a0eb0ef50a2dc1d9be094c",
   "packageName": "open-dronelog",
   "projectVersion": "3.3.3",
   "dependencies": [
@@ -24,6 +24,8 @@
     "react-i18next",
     "react-icons",
     "react-map-gl",
+    "react-markdown",
+    "remark-gfm",
     "tauri-plugin-android-fs-api",
     "zustand"
   ],

@@ -94,9 +94,13 @@ pub fn log_plugin_registration(data_dir: &Path) {
                 return;
             }
 
-            log::info!("Custom parser mappings discovered: {}", config.mappings.len());
+            log::info!(
+                "Custom parser mappings discovered: {}",
+                config.mappings.len()
+            );
             for (raw_ext, mapping) in &config.mappings {
-                let ext = normalize_extension(raw_ext).unwrap_or_else(|| raw_ext.to_ascii_lowercase());
+                let ext =
+                    normalize_extension(raw_ext).unwrap_or_else(|| raw_ext.to_ascii_lowercase());
                 log::info!(
                     "Registered custom parser: .{} -> command='{}' args={:?}",
                     ext,
@@ -127,10 +131,7 @@ pub async fn run_plugin(
         cmd.arg(arg_str);
     }
 
-    log::info!(
-        "Executing custom parser plugin subprocess: {:?}",
-        cmd
-    );
+    log::info!("Executing custom parser plugin subprocess: {:?}", cmd);
 
     let status = cmd
         .status()

@@ -16,6 +16,8 @@ services:
       # - /path/to/your/drone/logs/on/host/device:/data/drone-logbook/uploaded
     environment:
       - DATA_DIR=/data/drone-logbook
+      # Optional: allow trusted local/private model providers (requests originate in the container).
+      # - CHAT_ALLOW_PRIVATE_PROVIDERS=true
       - RUST_LOG=DEBUG
       - KEEP_UPLOADED_FILES=true
       # Obtain a key at https://developer.dji.com/user (see README for details).

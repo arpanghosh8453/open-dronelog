@@ -74,7 +74,7 @@ fn default_flight_color() -> Option<String> {
 #[serde(rename_all = "camelCase")]
 pub struct FlightTag {
     pub tag: String,
-    pub tag_type: String,  // "auto" or "manual"
+    pub tag_type: String, // "auto" or "manual"
 }
 
 /// Raw telemetry point from parser (for bulk insert)
@@ -474,9 +474,15 @@ impl TelemetryData {
     /// using uniform stride. Returns `[lng, lat, height]` triples.
     pub fn extract_track(&self, max_points: usize) -> Vec<[f64; 3]> {
         // Collect valid GPS points
-        let valid: Vec<[f64; 3]> = self.latitude.iter()
+        let valid: Vec<[f64; 3]> = self
+            .latitude
+            .iter()
             .zip(self.longitude.iter())
-            .zip(self.height.iter().zip(self.vps_height.iter().zip(self.altitude.iter())))
+            .zip(
+                self.height
+                    .iter()
+                    .zip(self.vps_height.iter().zip(self.altitude.iter())),
+            )
             .filter_map(|((lat, lng), (h, (vps, alt)))| {
                 let lat_v = (*lat)?;
                 let lng_v = (*lng)?;
@@ -495,9 +501,7 @@ impl TelemetryData {
 
         // Downsample with uniform stride
         let stride = valid.len() / max_points;
-        valid.into_iter()
-            .step_by(stride.max(1))
-            .collect()
+        valid.into_iter().step_by(stride.max(1)).collect()
     }
 }
 
@@ -640,7 +644,10 @@ pub fn load_profile_config(config_path: &std::path::Path) -> serde_json::Value {
 }
 
 /// Persist a profile's JSON config, creating parent directories if needed.
-pub fn save_profile_config(config_path: &std::path::Path, config: &serde_json::Value) -> Result<(), String> {
+pub fn save_profile_config(
+    config_path: &std::path::Path,
+    config: &serde_json::Value,
+) -> Result<(), String> {
     std::fs::write(config_path, serde_json::to_string_pretty(config).unwrap())
         .map_err(|e| format!("Failed to write config: {}", e))
 }

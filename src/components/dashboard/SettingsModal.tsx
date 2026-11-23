@@ -87,8 +87,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     loadFlights,
     loadOverview,
     clearSelection,
-    donationAcknowledged,
-    setDonationAcknowledged,
     smartTagsEnabled,
     setSmartTagsEnabled,
     loadSmartTagsEnabled,
@@ -1451,36 +1449,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               {/* Donation Status */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  {t('settings.donationStatus')}
+                  {t('settings.supporterBadge')}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!supporterBadgeActive) {
-                      setDonationAcknowledged(!donationAcknowledged);
-                    }
-                  }}
-                  className={`mt-2 flex items-center justify-between gap-3 w-full text-[0.85rem] text-gray-300 ${supporterBadgeActive ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  aria-pressed={donationAcknowledged}
-                  disabled={supporterBadgeActive}
-                >
-                  <span>{t('settings.removeBanner')}</span>
-                  <span
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-all ${donationAcknowledged
-                      ? 'bg-drone-primary/90 border-drone-primary'
-                      : 'bg-drone-surface border-gray-600 toggle-track-off'
-                      }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${donationAcknowledged ? 'translate-x-4' : 'translate-x-1'
-                        }`}
-                    />
-                  </span>
-                </button>
-                {supporterBadgeActive && (
-                  <p className="text-xs text-amber-400/80 mt-1">{t('settings.badgeLocked')}</p>
-                )}
-
                 {/* Supporter Badge and Shop Buttons (Side-by-side) */}
 
                 <p className="mt-3 text-xs text-gray-500 leading-relaxed">

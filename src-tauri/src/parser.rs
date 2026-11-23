@@ -13,7 +13,7 @@ use std::panic;
 use std::path::Path;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc, Timelike};
+use chrono::{DateTime, Timelike, Utc};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::time::timeout;
@@ -26,9 +26,9 @@ use dji_log_parser::record::smart_battery_group::SmartBatteryGroup;
 use dji_log_parser::record::Record;
 use dji_log_parser::DJILog;
 
+use crate::airdata_parser::AirdataParser;
 use crate::api::DjiApi;
 use crate::database::Database;
-use crate::airdata_parser::AirdataParser;
 use crate::dronedeploy_parser::DroneDeployParser;
 use crate::dronelogbook_parser::DroneLogbookParser;
 use crate::litchi_parser::LitchiParser;
@@ -92,10 +92,16 @@ fn extract_component_serials(records: &[Record]) -> ComponentSerials {
             let raw = sbs.loop_times as i32;
             let normalized = raw / 256;
             if normalized > 0 {
-                log::debug!("SmartBatteryStatic: loop_times={} -> cycle_count={}", raw, normalized);
+                log::debug!(
+                    "SmartBatteryStatic: loop_times={} -> cycle_count={}",
+                    raw,
+                    normalized
+                );
                 // Keep the maximum cycle count seen across all SmartBatteryStatic records
                 result.cycle_count = Some(
-                    result.cycle_count.map_or(normalized, |prev| prev.max(normalized))
+                    result
+                        .cycle_count
+                        .map_or(normalized, |prev| prev.max(normalized)),
                 );
             }
             // Extract battery life from SmartBatteryStatic
@@ -103,7 +109,9 @@ fn extract_component_serials(records: &[Record]) -> ComponentSerials {
             if battery_life_val > 0 {
                 log::debug!("SmartBatteryStatic: battery_life={}", battery_life_val);
                 result.battery_life = Some(
-                    result.battery_life.map_or(battery_life_val, |prev| prev.min(battery_life_val))
+                    result
+                        .battery_life
+                        .map_or(battery_life_val, |prev| prev.min(battery_life_val)),
                 );
             }
         }
@@ -207,7 +215,10 @@ impl<'a> LogParser<'a> {
             .is_file_imported(&file_hash)
             .map_err(|e| ParserError::Parse(e.to_string()))?
         {
-            log::info!("File already imported (hash match), skipping — matches flight: {}", matching_flight);
+            log::info!(
+                "File already imported (hash match), skipping — matches flight: {}",
+                matching_flight
+            );
             return Err(ParserError::AlreadyImported(matching_flight));
         }
 
@@ -255,8 +266,15 @@ impl<'a> LogParser<'a> {
 
         // Custom Plugin Fallback
         let err = builtin_err;
-        log::info!("Built-in parser failed or incompatible: {}. Trying custom plugins...", err);
-        let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        log::info!(
+            "Built-in parser failed or incompatible: {}. Trying custom plugins...",
+            err
+        );
+        let ext = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
         log::debug!("Custom plugin lookup for extension: '.{}'", ext);
 
         if let Some(config) = crate::plugins::get_plugin_config(&self.db.data_dir) {
@@ -267,10 +285,11 @@ impl<'a> LogParser<'a> {
                 .collect();
             log::debug!("Custom parser mappings available: {:?}", available_mappings);
 
-            let matched = config
-                .mappings
-                .iter()
-                .find(|(key, _)| key.trim().trim_start_matches('.').eq_ignore_ascii_case(&ext));
+            let matched = config.mappings.iter().find(|(key, _)| {
+                key.trim()
+                    .trim_start_matches('.')
+                    .eq_ignore_ascii_case(&ext)
+            });
 
             if let Some((matched_key, mapping)) = matched {
                 log::info!(
@@ -285,7 +304,9 @@ impl<'a> LogParser<'a> {
                 let output_csv = temp_dir.join(format!("{}_plugin_out.csv", uuid::Uuid::new_v4()));
                 log::debug!("Custom parser output temp path: {:?}", output_csv);
 
-                if let Err(plugin_err) = crate::plugins::run_plugin(mapping, file_path, &output_csv).await {
+                if let Err(plugin_err) =
+                    crate::plugins::run_plugin(mapping, file_path, &output_csv).await
+                {
                     log::error!(
                         "Custom parser subprocess failed for extension '.{}': {}",
                         ext,
@@ -341,7 +362,12 @@ impl<'a> LogParser<'a> {
     }
 
     /// Parse a DJI TXT log file
-    async fn parse_dji_txt(&self, file_path: &Path, file_hash: &str, parse_start: std::time::Instant) -> Result<ParseResult, ParserError> {
+    async fn parse_dji_txt(
+        &self,
+        file_path: &Path,
+        file_hash: &str,
+        parse_start: std::time::Instant,
+    ) -> Result<ParseResult, ParserError> {
         // Read the file
         let file_data = fs::read(file_path)?;
 
@@ -352,16 +378,16 @@ impl<'a> LogParser<'a> {
             let result = timeout(
                 Duration::from_secs(PARSE_TIMEOUT_SECS),
                 tokio::task::spawn_blocking(move || {
-                    panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                        DJILog::from_bytes(data)
-                    }))
+                    panic::catch_unwind(panic::AssertUnwindSafe(|| DJILog::from_bytes(data)))
                 }),
             )
             .await;
 
             match result {
                 Err(_) => return Err(ParserError::Timeout(PARSE_TIMEOUT_SECS)),
-                Ok(Err(join_err)) => return Err(ParserError::Panic(format!("Task join error: {}", join_err))),
+                Ok(Err(join_err)) => {
+                    return Err(ParserError::Panic(format!("Task join error: {}", join_err)))
+                }
                 Ok(Ok(Err(panic_val))) => {
                     let msg = panic_val
                         .downcast_ref::<String>()
@@ -385,7 +411,8 @@ impl<'a> LogParser<'a> {
         );
 
         // Check if we need an encryption key for V13+ logs
-        let (frames, used_djifly_fallback, component_serials) = self.get_frames(&parser, file_hash).await?;
+        let (frames, used_djifly_fallback, component_serials) =
+            self.get_frames(&parser, file_hash).await?;
         log::info!("Extracted {} frames from log", frames.len());
 
         // Log when ComponentSerial provides a longer serial than the header
@@ -393,8 +420,10 @@ impl<'a> LogParser<'a> {
             if full_sn.len() > parser.details.aircraft_sn.trim().len() {
                 log::info!(
                     "ComponentSerial override: aircraft_sn '{}' ({} chars) -> '{}' ({} chars)",
-                    parser.details.aircraft_sn.trim(), parser.details.aircraft_sn.trim().len(),
-                    full_sn, full_sn.len()
+                    parser.details.aircraft_sn.trim(),
+                    parser.details.aircraft_sn.trim().len(),
+                    full_sn,
+                    full_sn.len()
                 );
             }
         }
@@ -402,8 +431,10 @@ impl<'a> LogParser<'a> {
             if full_sn.len() > parser.details.battery_sn.trim().len() {
                 log::info!(
                     "ComponentSerial override: battery_sn '{}' ({} chars) -> '{}' ({} chars)",
-                    parser.details.battery_sn.trim(), parser.details.battery_sn.trim().len(),
-                    full_sn, full_sn.len()
+                    parser.details.battery_sn.trim(),
+                    parser.details.battery_sn.trim().len(),
+                    full_sn,
+                    full_sn.len()
                 );
             }
         }
@@ -428,7 +459,9 @@ impl<'a> LogParser<'a> {
         log::info!("Extracted {} app messages from log", messages.len());
 
         if points.is_empty() {
-            log::warn!("No valid telemetry points after filtering — all frames had corrupt/missing data");
+            log::warn!(
+                "No valid telemetry points after filtering — all frames had corrupt/missing data"
+            );
             return Err(ParserError::NoTelemetryData);
         }
 
@@ -458,21 +491,23 @@ impl<'a> LogParser<'a> {
             display_name,
             file_hash: Some(file_hash.to_string()),
             drone_model: self.extract_drone_model(&parser),
-            drone_serial: component_serials.aircraft.clone()
+            drone_serial: component_serials
+                .aircraft
+                .clone()
                 .or_else(|| self.extract_serial(&parser)),
             aircraft_name: self.extract_aircraft_name(&parser),
-            battery_serial: component_serials.battery.clone()
+            battery_serial: component_serials
+                .battery
+                .clone()
                 .or_else(|| self.extract_battery_serial(&parser)),
             cycle_count: component_serials.cycle_count,
             start_time: self.extract_start_time(&parser),
             end_time: self.extract_end_time(&parser),
-            duration_secs: Some(
-                if details_total_time_secs > 0.0 {
-                    details_total_time_secs
-                } else {
-                    stats.duration_secs
-                }
-            ),
+            duration_secs: Some(if details_total_time_secs > 0.0 {
+                details_total_time_secs
+            } else {
+                stats.duration_secs
+            }),
             total_distance: Some(stats.total_distance_m),
             max_altitude: Some(stats.max_altitude_m),
             max_speed: Some(stats.max_speed_ms),
@@ -481,11 +516,14 @@ impl<'a> LogParser<'a> {
             point_count: points.len() as i32,
             photo_count,
             video_count,
-            rc_serial: component_serials.rc.clone()
-                .or_else(|| {
-                    let sn = parser.details.rc_sn.trim().to_uppercase();
-                    if sn.is_empty() { None } else { Some(sn) }
-                }),
+            rc_serial: component_serials.rc.clone().or_else(|| {
+                let sn = parser.details.rc_sn.trim().to_uppercase();
+                if sn.is_empty() {
+                    None
+                } else {
+                    Some(sn)
+                }
+            }),
             battery_life: component_serials.battery_life,
         };
 
@@ -502,17 +540,24 @@ impl<'a> LogParser<'a> {
 
         // Generate smart tags based on flight characteristics
         let mut tags = Self::generate_smart_tags(&metadata, &stats);
-        
+
         // Add M-SDK tag if DJIFly department override was used (third-party app like Dronelink/DroneDeploy)
         if used_djifly_fallback {
             tags.push("M-SDK".to_string());
             log::info!("Added M-SDK tag (third-party app detected via DJIFly fallback)");
         }
-        
+
         log::info!("Generated smart tags: {:?}", tags);
 
-        Ok(ParseResult { metadata, points, tags, manual_tags: Vec::new(), notes: None, color: None, messages })
-
+        Ok(ParseResult {
+            metadata,
+            points,
+            tags,
+            manual_tags: Vec::new(),
+            notes: None,
+            color: None,
+            messages,
+        })
     }
 
     /// Generate smart tags based on flight metadata and statistics
@@ -547,7 +592,9 @@ impl<'a> LogParser<'a> {
         }
 
         // Heavy Load: battery consumption > 75% but flight time < 20 minutes
-        if let (Some(start_pct), Some(end_pct)) = (stats.start_battery_percent, stats.end_battery_percent) {
+        if let (Some(start_pct), Some(end_pct)) =
+            (stats.start_battery_percent, stats.end_battery_percent)
+        {
             let consumption = start_pct - end_pct;
             if consumption > 75 && stats.duration_secs < 1200.0 {
                 tags.push("Heavy Load".to_string());
@@ -628,7 +675,9 @@ impl<'a> LogParser<'a> {
             ("short_flight", "Short Flight"),
             ("aggressive_flying", "Aggressive Flying"),
             ("no_gps", "No GPS"),
-        ].into_iter().collect();
+        ]
+        .into_iter()
+        .collect();
 
         // Collect enabled tag names and check if location tags are enabled
         let enabled_tag_names: std::collections::HashSet<&str> = enabled_types
@@ -640,9 +689,16 @@ impl<'a> LogParser<'a> {
 
         // List of all continents for filtering
         let continents: std::collections::HashSet<&str> = [
-            "Africa", "Antarctica", "Asia", "Europe", 
-            "North America", "Oceania", "South America"
-        ].into_iter().collect();
+            "Africa",
+            "Antarctica",
+            "Asia",
+            "Europe",
+            "North America",
+            "Oceania",
+            "South America",
+        ]
+        .into_iter()
+        .collect();
 
         tags.into_iter()
             .filter(|tag| {
@@ -697,84 +753,239 @@ impl<'a> LogParser<'a> {
     /// Map ISO 3166-1 alpha-2 country code to country name.
     fn country_from_cc(cc: &str) -> Option<&'static str> {
         match cc {
-            "AD" => Some("Andorra"), "AE" => Some("UAE"), "AF" => Some("Afghanistan"),
-            "AG" => Some("Antigua and Barbuda"), "AI" => Some("Anguilla"), "AL" => Some("Albania"),
-            "AM" => Some("Armenia"), "AO" => Some("Angola"), "AQ" => Some("Antarctica"),
-            "AR" => Some("Argentina"), "AS" => Some("American Samoa"), "AT" => Some("Austria"),
-            "AU" => Some("Australia"), "AW" => Some("Aruba"), "AZ" => Some("Azerbaijan"),
-            "BA" => Some("Bosnia and Herzegovina"), "BB" => Some("Barbados"), "BD" => Some("Bangladesh"),
-            "BE" => Some("Belgium"), "BF" => Some("Burkina Faso"), "BG" => Some("Bulgaria"),
-            "BH" => Some("Bahrain"), "BI" => Some("Burundi"), "BJ" => Some("Benin"),
-            "BM" => Some("Bermuda"), "BN" => Some("Brunei"), "BO" => Some("Bolivia"),
-            "BR" => Some("Brazil"), "BS" => Some("Bahamas"), "BT" => Some("Bhutan"),
-            "BW" => Some("Botswana"), "BY" => Some("Belarus"), "BZ" => Some("Belize"),
-            "CA" => Some("Canada"), "CD" => Some("DR Congo"), "CF" => Some("Central African Republic"),
-            "CG" => Some("Congo"), "CH" => Some("Switzerland"), "CI" => Some("Ivory Coast"),
-            "CL" => Some("Chile"), "CM" => Some("Cameroon"), "CN" => Some("China"),
-            "CO" => Some("Colombia"), "CR" => Some("Costa Rica"), "CU" => Some("Cuba"),
-            "CV" => Some("Cape Verde"), "CW" => Some("Curaçao"), "CY" => Some("Cyprus"),
-            "CZ" => Some("Czech Republic"), "DE" => Some("Germany"), "DJ" => Some("Djibouti"),
-            "DK" => Some("Denmark"), "DM" => Some("Dominica"), "DO" => Some("Dominican Republic"),
-            "DZ" => Some("Algeria"), "EC" => Some("Ecuador"), "EE" => Some("Estonia"),
-            "EG" => Some("Egypt"), "ER" => Some("Eritrea"), "ES" => Some("Spain"),
-            "ET" => Some("Ethiopia"), "FI" => Some("Finland"), "FJ" => Some("Fiji"),
-            "FK" => Some("Falkland Islands"), "FM" => Some("Micronesia"), "FO" => Some("Faroe Islands"),
-            "FR" => Some("France"), "GA" => Some("Gabon"), "GB" => Some("United Kingdom"),
-            "GD" => Some("Grenada"), "GE" => Some("Georgia"), "GF" => Some("French Guiana"),
-            "GG" => Some("Guernsey"), "GH" => Some("Ghana"), "GI" => Some("Gibraltar"),
-            "GL" => Some("Greenland"), "GM" => Some("Gambia"), "GN" => Some("Guinea"),
-            "GP" => Some("Guadeloupe"), "GQ" => Some("Equatorial Guinea"), "GR" => Some("Greece"),
-            "GT" => Some("Guatemala"), "GU" => Some("Guam"), "GW" => Some("Guinea-Bissau"),
-            "GY" => Some("Guyana"), "HK" => Some("Hong Kong"), "HN" => Some("Honduras"),
-            "HR" => Some("Croatia"), "HT" => Some("Haiti"), "HU" => Some("Hungary"),
-            "ID" => Some("Indonesia"), "IE" => Some("Ireland"), "IL" => Some("Israel"),
-            "IM" => Some("Isle of Man"), "IN" => Some("India"), "IQ" => Some("Iraq"),
-            "IR" => Some("Iran"), "IS" => Some("Iceland"), "IT" => Some("Italy"),
-            "JE" => Some("Jersey"), "JM" => Some("Jamaica"), "JO" => Some("Jordan"),
-            "JP" => Some("Japan"), "KE" => Some("Kenya"), "KG" => Some("Kyrgyzstan"),
-            "KH" => Some("Cambodia"), "KI" => Some("Kiribati"), "KM" => Some("Comoros"),
-            "KN" => Some("Saint Kitts and Nevis"), "KP" => Some("North Korea"), "KR" => Some("South Korea"),
-            "KW" => Some("Kuwait"), "KY" => Some("Cayman Islands"), "KZ" => Some("Kazakhstan"),
-            "LA" => Some("Laos"), "LB" => Some("Lebanon"), "LC" => Some("Saint Lucia"),
-            "LI" => Some("Liechtenstein"), "LK" => Some("Sri Lanka"), "LR" => Some("Liberia"),
-            "LS" => Some("Lesotho"), "LT" => Some("Lithuania"), "LU" => Some("Luxembourg"),
-            "LV" => Some("Latvia"), "LY" => Some("Libya"), "MA" => Some("Morocco"),
-            "MC" => Some("Monaco"), "MD" => Some("Moldova"), "ME" => Some("Montenegro"),
-            "MG" => Some("Madagascar"), "MH" => Some("Marshall Islands"), "MK" => Some("North Macedonia"),
-            "ML" => Some("Mali"), "MM" => Some("Myanmar"), "MN" => Some("Mongolia"),
-            "MO" => Some("Macau"), "MQ" => Some("Martinique"), "MR" => Some("Mauritania"),
-            "MS" => Some("Montserrat"), "MT" => Some("Malta"), "MU" => Some("Mauritius"),
-            "MV" => Some("Maldives"), "MW" => Some("Malawi"), "MX" => Some("Mexico"),
-            "MY" => Some("Malaysia"), "MZ" => Some("Mozambique"), "NA" => Some("Namibia"),
-            "NC" => Some("New Caledonia"), "NE" => Some("Niger"), "NF" => Some("Norfolk Island"),
-            "NG" => Some("Nigeria"), "NI" => Some("Nicaragua"), "NL" => Some("Netherlands"),
-            "NO" => Some("Norway"), "NP" => Some("Nepal"), "NR" => Some("Nauru"),
-            "NU" => Some("Niue"), "NZ" => Some("New Zealand"), "OM" => Some("Oman"),
-            "PA" => Some("Panama"), "PE" => Some("Peru"), "PF" => Some("French Polynesia"),
-            "PG" => Some("Papua New Guinea"), "PH" => Some("Philippines"), "PK" => Some("Pakistan"),
-            "PL" => Some("Poland"), "PM" => Some("Saint Pierre and Miquelon"), "PR" => Some("Puerto Rico"),
-            "PS" => Some("Palestine"), "PT" => Some("Portugal"), "PW" => Some("Palau"),
-            "PY" => Some("Paraguay"), "QA" => Some("Qatar"), "RE" => Some("Réunion"),
-            "RO" => Some("Romania"), "RS" => Some("Serbia"), "RU" => Some("Russia"),
-            "RW" => Some("Rwanda"), "SA" => Some("Saudi Arabia"), "SB" => Some("Solomon Islands"),
-            "SC" => Some("Seychelles"), "SD" => Some("Sudan"), "SE" => Some("Sweden"),
-            "SG" => Some("Singapore"), "SH" => Some("Saint Helena"), "SI" => Some("Slovenia"),
-            "SK" => Some("Slovakia"), "SL" => Some("Sierra Leone"), "SM" => Some("San Marino"),
-            "SN" => Some("Senegal"), "SO" => Some("Somalia"), "SR" => Some("Suriname"),
-            "SS" => Some("South Sudan"), "ST" => Some("São Tomé and Príncipe"), "SV" => Some("El Salvador"),
-            "SX" => Some("Sint Maarten"), "SY" => Some("Syria"), "SZ" => Some("Eswatini"),
-            "TC" => Some("Turks and Caicos"), "TD" => Some("Chad"), "TG" => Some("Togo"),
-            "TH" => Some("Thailand"), "TJ" => Some("Tajikistan"), "TK" => Some("Tokelau"),
-            "TL" => Some("Timor-Leste"), "TM" => Some("Turkmenistan"), "TN" => Some("Tunisia"),
-            "TO" => Some("Tonga"), "TR" => Some("Turkey"), "TT" => Some("Trinidad and Tobago"),
-            "TV" => Some("Tuvalu"), "TW" => Some("Taiwan"), "TZ" => Some("Tanzania"),
-            "UA" => Some("Ukraine"), "UG" => Some("Uganda"), "US" => Some("United States"),
-            "UY" => Some("Uruguay"), "UZ" => Some("Uzbekistan"), "VA" => Some("Vatican City"),
-            "VC" => Some("Saint Vincent"), "VE" => Some("Venezuela"), "VG" => Some("British Virgin Islands"),
-            "VI" => Some("US Virgin Islands"), "VN" => Some("Vietnam"), "VU" => Some("Vanuatu"),
-            "WF" => Some("Wallis and Futuna"), "WS" => Some("Samoa"), "XK" => Some("Kosovo"),
-            "YE" => Some("Yemen"), "YT" => Some("Mayotte"), "ZA" => Some("South Africa"),
-            "ZM" => Some("Zambia"), "ZW" => Some("Zimbabwe"),
+            "AD" => Some("Andorra"),
+            "AE" => Some("UAE"),
+            "AF" => Some("Afghanistan"),
+            "AG" => Some("Antigua and Barbuda"),
+            "AI" => Some("Anguilla"),
+            "AL" => Some("Albania"),
+            "AM" => Some("Armenia"),
+            "AO" => Some("Angola"),
+            "AQ" => Some("Antarctica"),
+            "AR" => Some("Argentina"),
+            "AS" => Some("American Samoa"),
+            "AT" => Some("Austria"),
+            "AU" => Some("Australia"),
+            "AW" => Some("Aruba"),
+            "AZ" => Some("Azerbaijan"),
+            "BA" => Some("Bosnia and Herzegovina"),
+            "BB" => Some("Barbados"),
+            "BD" => Some("Bangladesh"),
+            "BE" => Some("Belgium"),
+            "BF" => Some("Burkina Faso"),
+            "BG" => Some("Bulgaria"),
+            "BH" => Some("Bahrain"),
+            "BI" => Some("Burundi"),
+            "BJ" => Some("Benin"),
+            "BM" => Some("Bermuda"),
+            "BN" => Some("Brunei"),
+            "BO" => Some("Bolivia"),
+            "BR" => Some("Brazil"),
+            "BS" => Some("Bahamas"),
+            "BT" => Some("Bhutan"),
+            "BW" => Some("Botswana"),
+            "BY" => Some("Belarus"),
+            "BZ" => Some("Belize"),
+            "CA" => Some("Canada"),
+            "CD" => Some("DR Congo"),
+            "CF" => Some("Central African Republic"),
+            "CG" => Some("Congo"),
+            "CH" => Some("Switzerland"),
+            "CI" => Some("Ivory Coast"),
+            "CL" => Some("Chile"),
+            "CM" => Some("Cameroon"),
+            "CN" => Some("China"),
+            "CO" => Some("Colombia"),
+            "CR" => Some("Costa Rica"),
+            "CU" => Some("Cuba"),
+            "CV" => Some("Cape Verde"),
+            "CW" => Some("Curaçao"),
+            "CY" => Some("Cyprus"),
+            "CZ" => Some("Czech Republic"),
+            "DE" => Some("Germany"),
+            "DJ" => Some("Djibouti"),
+            "DK" => Some("Denmark"),
+            "DM" => Some("Dominica"),
+            "DO" => Some("Dominican Republic"),
+            "DZ" => Some("Algeria"),
+            "EC" => Some("Ecuador"),
+            "EE" => Some("Estonia"),
+            "EG" => Some("Egypt"),
+            "ER" => Some("Eritrea"),
+            "ES" => Some("Spain"),
+            "ET" => Some("Ethiopia"),
+            "FI" => Some("Finland"),
+            "FJ" => Some("Fiji"),
+            "FK" => Some("Falkland Islands"),
+            "FM" => Some("Micronesia"),
+            "FO" => Some("Faroe Islands"),
+            "FR" => Some("France"),
+            "GA" => Some("Gabon"),
+            "GB" => Some("United Kingdom"),
+            "GD" => Some("Grenada"),
+            "GE" => Some("Georgia"),
+            "GF" => Some("French Guiana"),
+            "GG" => Some("Guernsey"),
+            "GH" => Some("Ghana"),
+            "GI" => Some("Gibraltar"),
+            "GL" => Some("Greenland"),
+            "GM" => Some("Gambia"),
+            "GN" => Some("Guinea"),
+            "GP" => Some("Guadeloupe"),
+            "GQ" => Some("Equatorial Guinea"),
+            "GR" => Some("Greece"),
+            "GT" => Some("Guatemala"),
+            "GU" => Some("Guam"),
+            "GW" => Some("Guinea-Bissau"),
+            "GY" => Some("Guyana"),
+            "HK" => Some("Hong Kong"),
+            "HN" => Some("Honduras"),
+            "HR" => Some("Croatia"),
+            "HT" => Some("Haiti"),
+            "HU" => Some("Hungary"),
+            "ID" => Some("Indonesia"),
+            "IE" => Some("Ireland"),
+            "IL" => Some("Israel"),
+            "IM" => Some("Isle of Man"),
+            "IN" => Some("India"),
+            "IQ" => Some("Iraq"),
+            "IR" => Some("Iran"),
+            "IS" => Some("Iceland"),
+            "IT" => Some("Italy"),
+            "JE" => Some("Jersey"),
+            "JM" => Some("Jamaica"),
+            "JO" => Some("Jordan"),
+            "JP" => Some("Japan"),
+            "KE" => Some("Kenya"),
+            "KG" => Some("Kyrgyzstan"),
+            "KH" => Some("Cambodia"),
+            "KI" => Some("Kiribati"),
+            "KM" => Some("Comoros"),
+            "KN" => Some("Saint Kitts and Nevis"),
+            "KP" => Some("North Korea"),
+            "KR" => Some("South Korea"),
+            "KW" => Some("Kuwait"),
+            "KY" => Some("Cayman Islands"),
+            "KZ" => Some("Kazakhstan"),
+            "LA" => Some("Laos"),
+            "LB" => Some("Lebanon"),
+            "LC" => Some("Saint Lucia"),
+            "LI" => Some("Liechtenstein"),
+            "LK" => Some("Sri Lanka"),
+            "LR" => Some("Liberia"),
+            "LS" => Some("Lesotho"),
+            "LT" => Some("Lithuania"),
+            "LU" => Some("Luxembourg"),
+            "LV" => Some("Latvia"),
+            "LY" => Some("Libya"),
+            "MA" => Some("Morocco"),
+            "MC" => Some("Monaco"),
+            "MD" => Some("Moldova"),
+            "ME" => Some("Montenegro"),
+            "MG" => Some("Madagascar"),
+            "MH" => Some("Marshall Islands"),
+            "MK" => Some("North Macedonia"),
+            "ML" => Some("Mali"),
+            "MM" => Some("Myanmar"),
+            "MN" => Some("Mongolia"),
+            "MO" => Some("Macau"),
+            "MQ" => Some("Martinique"),
+            "MR" => Some("Mauritania"),
+            "MS" => Some("Montserrat"),
+            "MT" => Some("Malta"),
+            "MU" => Some("Mauritius"),
+            "MV" => Some("Maldives"),
+            "MW" => Some("Malawi"),
+            "MX" => Some("Mexico"),
+            "MY" => Some("Malaysia"),
+            "MZ" => Some("Mozambique"),
+            "NA" => Some("Namibia"),
+            "NC" => Some("New Caledonia"),
+            "NE" => Some("Niger"),
+            "NF" => Some("Norfolk Island"),
+            "NG" => Some("Nigeria"),
+            "NI" => Some("Nicaragua"),
+            "NL" => Some("Netherlands"),
+            "NO" => Some("Norway"),
+            "NP" => Some("Nepal"),
+            "NR" => Some("Nauru"),
+            "NU" => Some("Niue"),
+            "NZ" => Some("New Zealand"),
+            "OM" => Some("Oman"),
+            "PA" => Some("Panama"),
+            "PE" => Some("Peru"),
+            "PF" => Some("French Polynesia"),
+            "PG" => Some("Papua New Guinea"),
+            "PH" => Some("Philippines"),
+            "PK" => Some("Pakistan"),
+            "PL" => Some("Poland"),
+            "PM" => Some("Saint Pierre and Miquelon"),
+            "PR" => Some("Puerto Rico"),
+            "PS" => Some("Palestine"),
+            "PT" => Some("Portugal"),
+            "PW" => Some("Palau"),
+            "PY" => Some("Paraguay"),
+            "QA" => Some("Qatar"),
+            "RE" => Some("Réunion"),
+            "RO" => Some("Romania"),
+            "RS" => Some("Serbia"),
+            "RU" => Some("Russia"),
+            "RW" => Some("Rwanda"),
+            "SA" => Some("Saudi Arabia"),
+            "SB" => Some("Solomon Islands"),
+            "SC" => Some("Seychelles"),
+            "SD" => Some("Sudan"),
+            "SE" => Some("Sweden"),
+            "SG" => Some("Singapore"),
+            "SH" => Some("Saint Helena"),
+            "SI" => Some("Slovenia"),
+            "SK" => Some("Slovakia"),
+            "SL" => Some("Sierra Leone"),
+            "SM" => Some("San Marino"),
+            "SN" => Some("Senegal"),
+            "SO" => Some("Somalia"),
+            "SR" => Some("Suriname"),
+            "SS" => Some("South Sudan"),
+            "ST" => Some("São Tomé and Príncipe"),
+            "SV" => Some("El Salvador"),
+            "SX" => Some("Sint Maarten"),
+            "SY" => Some("Syria"),
+            "SZ" => Some("Eswatini"),
+            "TC" => Some("Turks and Caicos"),
+            "TD" => Some("Chad"),
+            "TG" => Some("Togo"),
+            "TH" => Some("Thailand"),
+            "TJ" => Some("Tajikistan"),
+            "TK" => Some("Tokelau"),
+            "TL" => Some("Timor-Leste"),
+            "TM" => Some("Turkmenistan"),
+            "TN" => Some("Tunisia"),
+            "TO" => Some("Tonga"),
+            "TR" => Some("Turkey"),
+            "TT" => Some("Trinidad and Tobago"),
+            "TV" => Some("Tuvalu"),
+            "TW" => Some("Taiwan"),
+            "TZ" => Some("Tanzania"),
+            "UA" => Some("Ukraine"),
+            "UG" => Some("Uganda"),
+            "US" => Some("United States"),
+            "UY" => Some("Uruguay"),
+            "UZ" => Some("Uzbekistan"),
+            "VA" => Some("Vatican City"),
+            "VC" => Some("Saint Vincent"),
+            "VE" => Some("Venezuela"),
+            "VG" => Some("British Virgin Islands"),
+            "VI" => Some("US Virgin Islands"),
+            "VN" => Some("Vietnam"),
+            "VU" => Some("Vanuatu"),
+            "WF" => Some("Wallis and Futuna"),
+            "WS" => Some("Samoa"),
+            "XK" => Some("Kosovo"),
+            "YE" => Some("Yemen"),
+            "YT" => Some("Mayotte"),
+            "ZA" => Some("South Africa"),
+            "ZM" => Some("Zambia"),
+            "ZW" => Some("Zimbabwe"),
             _ => None,
         }
     }
@@ -783,46 +994,61 @@ impl<'a> LogParser<'a> {
     fn continent_from_cc(cc: &str) -> Option<&'static str> {
         match cc {
             // Europe
-            "AD"|"AL"|"AT"|"BA"|"BE"|"BG"|"BY"|"CH"|"CY"|"CZ"|"DE"|"DK"|"EE"|"ES"|"FI"|
-            "FO"|"FR"|"GB"|"GE"|"GG"|"GI"|"GR"|"HR"|"HU"|"IE"|"IM"|"IS"|"IT"|"JE"|"LI"|
-            "LT"|"LU"|"LV"|"MC"|"MD"|"ME"|"MK"|"MT"|"NL"|"NO"|"PL"|"PT"|"RO"|"RS"|"SE"|
-            "SI"|"SK"|"SM"|"UA"|"VA"|"XK" => Some("Europe"),
+            "AD" | "AL" | "AT" | "BA" | "BE" | "BG" | "BY" | "CH" | "CY" | "CZ" | "DE" | "DK"
+            | "EE" | "ES" | "FI" | "FO" | "FR" | "GB" | "GE" | "GG" | "GI" | "GR" | "HR" | "HU"
+            | "IE" | "IM" | "IS" | "IT" | "JE" | "LI" | "LT" | "LU" | "LV" | "MC" | "MD" | "ME"
+            | "MK" | "MT" | "NL" | "NO" | "PL" | "PT" | "RO" | "RS" | "SE" | "SI" | "SK" | "SM"
+            | "UA" | "VA" | "XK" => Some("Europe"),
             // North America
-            "AG"|"AI"|"AW"|"BB"|"BM"|"BS"|"BZ"|"CA"|"CR"|"CU"|"CW"|"DM"|"DO"|"GD"|"GL"|
-            "GP"|"GT"|"GU"|"HN"|"HT"|"JM"|"KN"|"KY"|"LC"|"MQ"|"MS"|"MX"|"NI"|"PA"|"PM"|
-            "PR"|"SV"|"SX"|"TC"|"TT"|"US"|"VC"|"VG"|"VI" => Some("North America"),
+            "AG" | "AI" | "AW" | "BB" | "BM" | "BS" | "BZ" | "CA" | "CR" | "CU" | "CW" | "DM"
+            | "DO" | "GD" | "GL" | "GP" | "GT" | "GU" | "HN" | "HT" | "JM" | "KN" | "KY" | "LC"
+            | "MQ" | "MS" | "MX" | "NI" | "PA" | "PM" | "PR" | "SV" | "SX" | "TC" | "TT" | "US"
+            | "VC" | "VG" | "VI" => Some("North America"),
             // South America
-            "AR"|"BO"|"BR"|"CL"|"CO"|"EC"|"FK"|"GF"|"GY"|"PE"|"PY"|"SR"|"UY"|"VE"
-                => Some("South America"),
+            "AR" | "BO" | "BR" | "CL" | "CO" | "EC" | "FK" | "GF" | "GY" | "PE" | "PY" | "SR"
+            | "UY" | "VE" => Some("South America"),
             // Africa
-            "AO"|"BF"|"BI"|"BJ"|"BW"|"CD"|"CF"|"CG"|"CI"|"CM"|"CV"|"DJ"|"DZ"|"EG"|"ER"|
-            "ET"|"GA"|"GH"|"GM"|"GN"|"GQ"|"GW"|"KE"|"KM"|"LR"|"LS"|"LY"|"MA"|"MG"|"ML"|
-            "MR"|"MU"|"MW"|"MZ"|"NA"|"NE"|"NG"|"RE"|"RW"|"SC"|"SD"|"SH"|"SL"|"SN"|"SO"|
-            "SS"|"ST"|"SZ"|"TD"|"TG"|"TN"|"TZ"|"UG"|"YT"|"ZA"|"ZM"|"ZW"
-                => Some("Africa"),
+            "AO" | "BF" | "BI" | "BJ" | "BW" | "CD" | "CF" | "CG" | "CI" | "CM" | "CV" | "DJ"
+            | "DZ" | "EG" | "ER" | "ET" | "GA" | "GH" | "GM" | "GN" | "GQ" | "GW" | "KE" | "KM"
+            | "LR" | "LS" | "LY" | "MA" | "MG" | "ML" | "MR" | "MU" | "MW" | "MZ" | "NA" | "NE"
+            | "NG" | "RE" | "RW" | "SC" | "SD" | "SH" | "SL" | "SN" | "SO" | "SS" | "ST" | "SZ"
+            | "TD" | "TG" | "TN" | "TZ" | "UG" | "YT" | "ZA" | "ZM" | "ZW" => Some("Africa"),
             // Asia
-            "AE"|"AF"|"AM"|"AZ"|"BD"|"BH"|"BN"|"CN"|"HK"|"ID"|"IL"|"IN"|"IQ"|"IR"|"JO"|
-            "JP"|"KG"|"KH"|"KP"|"KR"|"KW"|"KZ"|"LA"|"LB"|"LK"|"MM"|"MN"|"MO"|"MV"|"MY"|
-            "NP"|"OM"|"PH"|"PK"|"PS"|"QA"|"RU"|"SA"|"SG"|"SY"|"TH"|"TJ"|"TL"|"TM"|"TR"|
-            "TW"|"UZ"|"VN"|"YE" => Some("Asia"),
+            "AE" | "AF" | "AM" | "AZ" | "BD" | "BH" | "BN" | "CN" | "HK" | "ID" | "IL" | "IN"
+            | "IQ" | "IR" | "JO" | "JP" | "KG" | "KH" | "KP" | "KR" | "KW" | "KZ" | "LA" | "LB"
+            | "LK" | "MM" | "MN" | "MO" | "MV" | "MY" | "NP" | "OM" | "PH" | "PK" | "PS" | "QA"
+            | "RU" | "SA" | "SG" | "SY" | "TH" | "TJ" | "TL" | "TM" | "TR" | "TW" | "UZ" | "VN"
+            | "YE" => Some("Asia"),
             // Oceania
-            "AS"|"AU"|"FJ"|"FM"|"KI"|"MH"|"NC"|"NF"|"NR"|"NU"|"NZ"|"PF"|"PG"|"PW"|"SB"|
-            "TK"|"TO"|"TV"|"VU"|"WF"|"WS" => Some("Oceania"),
+            "AS" | "AU" | "FJ" | "FM" | "KI" | "MH" | "NC" | "NF" | "NR" | "NU" | "NZ" | "PF"
+            | "PG" | "PW" | "SB" | "TK" | "TO" | "TV" | "VU" | "WF" | "WS" => Some("Oceania"),
             // Antarctica
             "AQ" => Some("Antarctica"),
             _ => None,
         }
     }
 
-    async fn fetch_keychains_reqwest(&self, parser: &DJILog, api_key: &str, department_override: Option<Department>) -> Result<Vec<Vec<dji_log_parser::keychain::KeychainFeaturePoint>>, ParserError> {
+    async fn fetch_keychains_reqwest(
+        &self,
+        parser: &DJILog,
+        api_key: &str,
+        department_override: Option<Department>,
+    ) -> Result<Vec<Vec<dji_log_parser::keychain::KeychainFeaturePoint>>, ParserError> {
         let request = if let Some(dept) = department_override {
-            log::debug!("Creating keychain request with department override: {:?}", dept);
-            parser.keychains_request_with_custom_params(Some(dept), None)
-                .map_err(|e| ParserError::Api(format!("Failed to create keychain request: {}", e)))?
+            log::debug!(
+                "Creating keychain request with department override: {:?}",
+                dept
+            );
+            parser
+                .keychains_request_with_custom_params(Some(dept), None)
+                .map_err(|e| {
+                    ParserError::Api(format!("Failed to create keychain request: {}", e))
+                })?
         } else {
             log::debug!("Creating standard keychain request");
-            parser.keychains_request()
-                .map_err(|e| ParserError::Api(format!("Failed to create keychain request: {}", e)))?
+            parser.keychains_request().map_err(|e| {
+                ParserError::Api(format!("Failed to create keychain request: {}", e))
+            })?
         };
 
         // reqwest::Client automatically honors HTTP_PROXY and HTTPS_PROXY environment variables
@@ -835,7 +1061,8 @@ impl<'a> LogParser<'a> {
         let endpoint = "https://dev.dji.com/openapi/v1/flight-records/keychains";
 
         log::debug!("Connecting to keychain API endpoint: {}", endpoint);
-        let response = client.post(endpoint)
+        let response = client
+            .post(endpoint)
             .header("Content-Type", "application/json")
             .header("Api-Key", api_key)
             .json(&request)
@@ -846,7 +1073,10 @@ impl<'a> LogParser<'a> {
                 ParserError::Api(format!("Network request failed: {}", e))
             })?;
 
-        log::debug!("Received response from keychain API: HTTP {}", response.status());
+        log::debug!(
+            "Received response from keychain API: HTTP {}",
+            response.status()
+        );
 
         if !response.status().is_success() {
             if response.status() == 403 {
@@ -854,17 +1084,23 @@ impl<'a> LogParser<'a> {
                 return Err(ParserError::Api("Invalid API Key".to_string()));
             }
             log::debug!("Keychain API rejected request: HTTP {}", response.status());
-            return Err(ParserError::Api(format!("API returned status {}", response.status())));
+            return Err(ParserError::Api(format!(
+                "API returned status {}",
+                response.status()
+            )));
         }
 
         log::debug!("Parsing keychain response JSON");
-        let keychains_response: dji_log_parser::keychain::KeychainsResponse = response.json().await
-            .map_err(|e| {
+        let keychains_response: dji_log_parser::keychain::KeychainsResponse =
+            response.json().await.map_err(|e| {
                 log::debug!("Failed to parse keychain response JSON: {}", e);
                 ParserError::Api(format!("Failed to parse response: {}", e))
             })?;
 
-        log::debug!("Keychain API result code: {}", keychains_response.result.code);
+        log::debug!(
+            "Keychain API result code: {}",
+            keychains_response.result.code
+        );
 
         if keychains_response.result.code != 0 {
             Err(ParserError::Api(keychains_response.result.msg))
@@ -873,11 +1109,11 @@ impl<'a> LogParser<'a> {
                 Some(data) => {
                     log::debug!("Successfully parsed keychain payload");
                     Ok(data)
-                },
+                }
                 None => {
                     log::debug!("Keychain response was OK but missing data payload");
                     Err(ParserError::Api("Missing keychain data".to_owned()))
-                },
+                }
             }
         }
     }
@@ -887,7 +1123,11 @@ impl<'a> LogParser<'a> {
     /// to prevent panics from crashing the application.
     /// Returns (frames, used_djifly_fallback) where used_djifly_fallback indicates
     /// if the DJIFly department override was needed (third-party app like Dronelink).
-    async fn get_frames(&self, parser: &DJILog, file_hash: &str) -> Result<(Vec<Frame>, bool, ComponentSerials), ParserError> {
+    async fn get_frames(
+        &self,
+        parser: &DJILog,
+        file_hash: &str,
+    ) -> Result<(Vec<Frame>, bool, ComponentSerials), ParserError> {
         // Version 13+ requires keychains for decryption
         let (keychains, used_djifly_fallback) = if parser.version >= 13 {
             // First check database cache
@@ -897,29 +1137,37 @@ impl<'a> LogParser<'a> {
                     (Some(cached_kc), false)
                 }
                 _ => {
-                    let api_key = self.api.get_api_key().ok_or(ParserError::EncryptionKeyRequired)?;
-                    
+                    let api_key = self
+                        .api
+                        .get_api_key()
+                        .ok_or(ParserError::EncryptionKeyRequired)?;
+
                     // Try standard keychain fetch first
-                    let (kc, used_fallback) = match self.fetch_keychains_reqwest(parser, &api_key, None).await {
+                    let (kc, used_fallback) = match self
+                        .fetch_keychains_reqwest(parser, &api_key, None)
+                        .await
+                    {
                         Ok(kc) => (kc, false),
                         Err(e) => {
                             // Standard fetch failed — try fallback for third-party apps
                             log::warn!("Standard keychain fetch failed: {}. Retrying with DJIFly department override...", e);
-                            
+
                             let fallback_kc = self.fetch_keychains_reqwest(parser, &api_key, Some(Department::DJIFly)).await.map_err(|e| {
                                 ParserError::Api(format!("Keychain fetch failed (both standard and DJIFly fallback): {}", e))
                             })?;
-                            
-                            log::info!("Successfully fetched keychains using DJIFly department override");
+
+                            log::info!(
+                                "Successfully fetched keychains using DJIFly department override"
+                            );
                             (fallback_kc, true)
                         }
                     };
-                    
+
                     // Save the successfully fetched keychain to cache
                     if let Err(e) = self.db.save_cached_keychain(file_hash, &kc) {
                         log::warn!("Failed to save fetched keychain to cache: {}", e);
                     }
-                    
+
                     (Some(kc), used_fallback)
                 }
             }
@@ -946,16 +1194,18 @@ impl<'a> LogParser<'a> {
                     // drones have 20-char serials stored in ComponentSerial records.
                     let mut records = parser_ref.records(keychains)?;
                     let comp_serials = extract_component_serials(&records);
-                    
+
                     // Filter out corrupt SmartBatteryGroup payloads for DJI Mini 2 & Mini 2 SE
                     // which would otherwise overwrite valid SmartBattery (magic byte 8) data
                     match parser_ref.details.product_type {
                         ProductType::Mini2 | ProductType::Mini2SE => {
-                            records.retain(|r| !matches!(r, dji_log_parser::record::Record::SmartBatteryGroup(_)));
+                            records.retain(|r| {
+                                !matches!(r, dji_log_parser::record::Record::SmartBatteryGroup(_))
+                            });
                         }
                         _ => {}
                     }
-                    
+
                     // Camera records arrive less often than OSD ticks. Preserve their latest
                     // state across frames, including photo state which the library resets.
                     let mut persistent_camera_states = Vec::new();
@@ -971,7 +1221,8 @@ impl<'a> LogParser<'a> {
                             }
                             dji_log_parser::record::Record::OSD(_) => {
                                 if osd_count > 0 {
-                                    persistent_camera_states.push((current_is_photo, current_is_video));
+                                    persistent_camera_states
+                                        .push((current_is_photo, current_is_video));
                                 }
                                 osd_count += 1;
                             }
@@ -980,9 +1231,11 @@ impl<'a> LogParser<'a> {
                     }
 
                     let mut frames = records_to_frames(records, parser_ref.details.clone());
-                    
+
                     // Override the artificially false values injected by the library with our persistent trackers
-                    for (frame, &(is_photo, is_video)) in frames.iter_mut().zip(persistent_camera_states.iter()) {
+                    for (frame, &(is_photo, is_video)) in
+                        frames.iter_mut().zip(persistent_camera_states.iter())
+                    {
                         frame.camera.is_photo = is_photo;
                         frame.camera.is_video = is_video;
                     }
@@ -1004,16 +1257,18 @@ impl<'a> LogParser<'a> {
                     .unwrap_or_else(|| "unknown panic".to_string());
                 Err(ParserError::Panic(msg))
             }
-            Ok(Ok(Ok(frames_result))) => {
-                frames_result
-                    .map(|(frames, comp_serials)| (frames, used_djifly_fallback, comp_serials))
-                    .map_err(|e: dji_log_parser::Error| ParserError::Parse(e.to_string()))
-            }
+            Ok(Ok(Ok(frames_result))) => frames_result
+                .map(|(frames, comp_serials)| (frames, used_djifly_fallback, comp_serials))
+                .map_err(|e: dji_log_parser::Error| ParserError::Parse(e.to_string())),
         }
     }
 
     /// Extract telemetry points from parsed frames
-    fn extract_telemetry(&self, frames: &[Frame], details_total_time_secs: f64) -> Vec<TelemetryPoint> {
+    fn extract_telemetry(
+        &self,
+        frames: &[Frame],
+        details_total_time_secs: f64,
+    ) -> Vec<TelemetryPoint> {
         let mut points = Vec::with_capacity(frames.len());
         let mut home_gps: Option<(f64, f64)> = None;
         let mut prev_valid_gps: Option<(f64, f64, i64)> = None;
@@ -1134,7 +1389,10 @@ impl<'a> LogParser<'a> {
                     }
 
                     // Speed-aware jump rejection for shorter but still impossible jumps.
-                    if !rejected && jump_m > MAX_GPS_JUMP_DISTANCE_M && jump_speed_mps > MAX_GPS_JUMP_SPEED_MPS {
+                    if !rejected
+                        && jump_m > MAX_GPS_JUMP_DISTANCE_M
+                        && jump_speed_mps > MAX_GPS_JUMP_SPEED_MPS
+                    {
                         skipped_jump += 1;
                         rejected = true;
                     }
@@ -1171,19 +1429,46 @@ impl<'a> LogParser<'a> {
             // Clamp altitude/height to physically plausible range (reject garbage)
             let alt = osd.altitude as f64;
             let height = osd.height as f64;
-            point.altitude = if alt.abs() < 10_000.0 { Some(alt) } else { skipped_alt_clamp += 1; None };
-            point.height = if height.abs() < 10_000.0 { Some(height) } else { skipped_alt_clamp += 1; None };
+            point.altitude = if alt.abs() < 10_000.0 {
+                Some(alt)
+            } else {
+                skipped_alt_clamp += 1;
+                None
+            };
+            point.height = if height.abs() < 10_000.0 {
+                Some(height)
+            } else {
+                skipped_alt_clamp += 1;
+                None
+            };
             point.vps_height = Some(osd.vps_height as f64);
 
             point.speed = if has_valid_gps {
                 let spd = (osd.x_speed.powi(2) + osd.y_speed.powi(2)).sqrt() as f64;
-                if spd < 100.0 { Some(spd) } else { skipped_speed_clamp += 1; None } // >100 m/s is clearly garbage
+                if spd < 100.0 {
+                    Some(spd)
+                } else {
+                    skipped_speed_clamp += 1;
+                    None
+                } // >100 m/s is clearly garbage
             } else {
                 None // Speed from 0,0 origin is meaningless
             };
-            point.velocity_x = if has_valid_gps { Some(osd.x_speed as f64) } else { None };
-            point.velocity_y = if has_valid_gps { Some(osd.y_speed as f64) } else { None };
-            point.velocity_z = if has_valid_gps { Some(osd.z_speed as f64) } else { None };
+            point.velocity_x = if has_valid_gps {
+                Some(osd.x_speed as f64)
+            } else {
+                None
+            };
+            point.velocity_y = if has_valid_gps {
+                Some(osd.y_speed as f64)
+            } else {
+                None
+            };
+            point.velocity_z = if has_valid_gps {
+                Some(osd.z_speed as f64)
+            } else {
+                None
+            };
             point.pitch = Some(osd.pitch as f64);
             point.roll = Some(osd.roll as f64);
             point.yaw = Some(osd.yaw as f64);
@@ -1201,12 +1486,13 @@ impl<'a> LogParser<'a> {
                 None
             };
             let batt_v = battery.voltage as f64;
-            point.battery_voltage = if batt_v.is_finite() && batt_v > 0.0 && batt_v <= MAX_BATTERY_VOLTAGE_V {
-                Some(batt_v)
-            } else {
-                skipped_battery_voltage_clamp += 1;
-                None
-            };
+            point.battery_voltage =
+                if batt_v.is_finite() && batt_v > 0.0 && batt_v <= MAX_BATTERY_VOLTAGE_V {
+                    Some(batt_v)
+                } else {
+                    skipped_battery_voltage_clamp += 1;
+                    None
+                };
             point.battery_current = Some(battery.current as f64);
             point.battery_temp = Some(battery.temperature as f64);
             // Extract battery capacity telemetry
@@ -1243,7 +1529,7 @@ impl<'a> LogParser<'a> {
             // Photos are capture events; video stays true throughout recording so
             // consumers can detect both start and stop transitions.
             let camera = &frame.camera;
-            
+
             let is_photo_now = camera.is_photo;
             let is_video_now = camera.is_video;
 
@@ -1286,7 +1572,8 @@ impl<'a> LogParser<'a> {
         } else {
             log::debug!(
                 "Telemetry extraction clean: {} points, {} frames without GPS lock",
-                points.len(), skipped_no_gps
+                points.len(),
+                skipped_no_gps
             );
         }
 
@@ -1295,7 +1582,10 @@ impl<'a> LogParser<'a> {
 
     /// Calculate flight statistics from telemetry points
     pub fn calculate_stats(&self, points: &[TelemetryPoint]) -> FlightStats {
-        let duration_secs = points.last().map(|p| p.timestamp_ms as f64 / 1000.0).unwrap_or(0.0);
+        let duration_secs = points
+            .last()
+            .map(|p| p.timestamp_ms as f64 / 1000.0)
+            .unwrap_or(0.0);
 
         let max_altitude = points
             .iter()
@@ -1327,12 +1617,10 @@ impl<'a> LogParser<'a> {
         let total_distance = self.calculate_total_distance(points);
 
         // Home location is the first valid GPS point
-        let home_location = points
-            .iter()
-            .find_map(|p| match (p.longitude, p.latitude) {
-                (Some(lon), Some(lat)) => Some([lon, lat]),
-                _ => None,
-            });
+        let home_location = points.iter().find_map(|p| match (p.longitude, p.latitude) {
+            (Some(lon), Some(lat)) => Some([lon, lat]),
+            _ => None,
+        });
 
         // Max distance from home
         let max_distance_from_home = if let Some(home) = home_location {
@@ -1362,7 +1650,11 @@ impl<'a> LogParser<'a> {
             } else {
                 0.0
             },
-            max_speed_ms: if max_speed.is_finite() { max_speed } else { 0.0 },
+            max_speed_ms: if max_speed.is_finite() {
+                max_speed
+            } else {
+                0.0
+            },
             avg_speed_ms: avg_speed,
             min_battery,
             home_location,
@@ -1393,7 +1685,11 @@ impl<'a> LogParser<'a> {
     }
 
     /// Extract app messages (tips and warnings) from parsed frames
-    fn extract_messages(&self, frames: &[Frame], details_total_time_secs: f64) -> Vec<FlightMessage> {
+    fn extract_messages(
+        &self,
+        frames: &[Frame],
+        details_total_time_secs: f64,
+    ) -> Vec<FlightMessage> {
         let mut messages = Vec::new();
 
         // Keep message timestamps on the same cadence as telemetry so exports and
@@ -1423,7 +1719,13 @@ impl<'a> LogParser<'a> {
         // ----------------------------------------------------------------
 
         // Helper formatting closures
-        fn fmt_bool(v: bool) -> &'static str { if v { "Yes" } else { "No" } }
+        fn fmt_bool(v: bool) -> &'static str {
+            if v {
+                "Yes"
+            } else {
+                "No"
+            }
+        }
         fn fmt_voltage_warning(v: u8) -> String {
             match v {
                 0 => "Normal".to_string(),
@@ -1478,7 +1780,12 @@ impl<'a> LogParser<'a> {
                         $msgs.push(FlightMessage {
                             timestamp_ms: $ts,
                             message_type: $severity.to_string(),
-                            message: format!("{} changed from {} to {}", $name, fmt_bool(prev_val), fmt_bool(cur_val)),
+                            message: format!(
+                                "{} changed from {} to {}",
+                                $name,
+                                fmt_bool(prev_val),
+                                fmt_bool(cur_val)
+                            ),
                         });
                     }
                 }
@@ -1547,24 +1854,78 @@ impl<'a> LogParser<'a> {
             // ============================================================
             //  Caution-level state changes (hardware / sensor errors)
             // ============================================================
-            track_bool!(frame.osd.is_compass_error, prev_is_compass_error,
-                "Compass Error", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_motor_blocked, prev_is_motor_blocked,
-                "Motor Blocked", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_barometer_dead_in_air, prev_is_barometer_dead_in_air,
-                "Barometer Dead In Air", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_acceletor_over_range, prev_is_acceletor_over_range,
-                "Accelerometer Over Range", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_not_enough_force, prev_is_not_enough_force,
-                "Not Enough Force", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_propeller_catapult, prev_is_propeller_catapult,
-                "Propeller Catapult", "caution", current_timestamp_ms, messages);
-            track_string!(fmt_opt_enum(&frame.osd.motor_start_failed_cause), prev_motor_start_failed_cause,
-                "Motor Start Failed Cause", "caution", current_timestamp_ms, messages);
-            track_string!(fmt_opt_enum(&frame.osd.imu_init_fail_reason), prev_imu_init_fail_reason,
-                "IMU Init Fail Reason", "caution", current_timestamp_ms, messages);
-            track_bool!(frame.gimbal.is_stuck, prev_gimbal_is_stuck,
-                "Gimbal Stuck", "caution", current_timestamp_ms, messages);
+            track_bool!(
+                frame.osd.is_compass_error,
+                prev_is_compass_error,
+                "Compass Error",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_motor_blocked,
+                prev_is_motor_blocked,
+                "Motor Blocked",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_barometer_dead_in_air,
+                prev_is_barometer_dead_in_air,
+                "Barometer Dead In Air",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_acceletor_over_range,
+                prev_is_acceletor_over_range,
+                "Accelerometer Over Range",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_not_enough_force,
+                prev_is_not_enough_force,
+                "Not Enough Force",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_propeller_catapult,
+                prev_is_propeller_catapult,
+                "Propeller Catapult",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_string!(
+                fmt_opt_enum(&frame.osd.motor_start_failed_cause),
+                prev_motor_start_failed_cause,
+                "Motor Start Failed Cause",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_string!(
+                fmt_opt_enum(&frame.osd.imu_init_fail_reason),
+                prev_imu_init_fail_reason,
+                "IMU Init Fail Reason",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.gimbal.is_stuck,
+                prev_gimbal_is_stuck,
+                "Gimbal Stuck",
+                "caution",
+                current_timestamp_ms,
+                messages
+            );
 
             // ============================================================
             //  Warning-level state changes (operational)
@@ -1576,35 +1937,92 @@ impl<'a> LogParser<'a> {
                         messages.push(FlightMessage {
                             timestamp_ms: current_timestamp_ms,
                             message_type: "warn".to_string(),
-                            message: format!("Voltage Warning changed from {} to {}",
-                                fmt_voltage_warning(prev_vw), fmt_voltage_warning(cur_vw)),
+                            message: format!(
+                                "Voltage Warning changed from {} to {}",
+                                fmt_voltage_warning(prev_vw),
+                                fmt_voltage_warning(cur_vw)
+                            ),
                         });
                     }
                 }
                 prev_voltage_warning = Some(cur_vw);
             }
-            track_bool!(frame.osd.wave_error, prev_wave_error,
-                "Wave Error", "warn", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_out_of_limit, prev_is_out_of_limit,
-                "Out Of Limit", "warn", current_timestamp_ms, messages);
-            track_string!(fmt_opt_enum(&frame.osd.go_home_status), prev_go_home_status,
-                "Go Home Status", "warn", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_vibrating, prev_is_vibrating,
-                "Vibrating", "warn", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_go_home_height_modified, prev_is_go_home_height_modified,
-                "Go Home Height Modified", "warn", current_timestamp_ms, messages);
-            track_string!(fmt_opt_enum(&frame.osd.non_gps_cause), prev_non_gps_cause,
-                "Non-GPS Cause", "warn", current_timestamp_ms, messages);
+            track_bool!(
+                frame.osd.wave_error,
+                prev_wave_error,
+                "Wave Error",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_out_of_limit,
+                prev_is_out_of_limit,
+                "Out Of Limit",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
+            track_string!(
+                fmt_opt_enum(&frame.osd.go_home_status),
+                prev_go_home_status,
+                "Go Home Status",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_vibrating,
+                prev_is_vibrating,
+                "Vibrating",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_go_home_height_modified,
+                prev_is_go_home_height_modified,
+                "Go Home Height Modified",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
+            track_string!(
+                fmt_opt_enum(&frame.osd.non_gps_cause),
+                prev_non_gps_cause,
+                "Non-GPS Cause",
+                "warn",
+                current_timestamp_ms,
+                messages
+            );
 
             // ============================================================
             //  Info-level state changes (informational)
             // ============================================================
-            track_bool!(frame.osd.is_vision_used, prev_is_vision_used,
-                "Vision Positioning", "tip", current_timestamp_ms, messages);
-            track_bool!(frame.osd.is_imu_preheated, prev_is_imu_preheated,
-                "IMU Preheated", "tip", current_timestamp_ms, messages);
-            track_bool!(frame.osd.can_ioc_work, prev_can_ioc_work,
-                "IOC Available", "tip", current_timestamp_ms, messages);
+            track_bool!(
+                frame.osd.is_vision_used,
+                prev_is_vision_used,
+                "Vision Positioning",
+                "tip",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.is_imu_preheated,
+                prev_is_imu_preheated,
+                "IMU Preheated",
+                "tip",
+                current_timestamp_ms,
+                messages
+            );
+            track_bool!(
+                frame.osd.can_ioc_work,
+                prev_can_ioc_work,
+                "IOC Available",
+                "tip",
+                current_timestamp_ms,
+                messages
+            );
 
             // ============================================================
             //  Flight Action transitions (descriptive event messages)
@@ -1627,7 +2045,7 @@ impl<'a> LogParser<'a> {
                     _ => std::option::Option::None,
                 }
             });
-            
+
             if current_flight_action_msg != prev_flight_action_msg {
                 if let Some(msg) = current_flight_action_msg {
                     messages.push(FlightMessage {
@@ -1638,7 +2056,6 @@ impl<'a> LogParser<'a> {
                 }
             }
             prev_flight_action_msg = current_flight_action_msg;
-
         }
 
         if sampling_plan.has_candidates {
@@ -1717,7 +2134,10 @@ struct FlyTimeSamplingPlan {
     max_nearest_gap_ms: i64,
 }
 
-fn build_fly_time_sampling_plan(frames: &[Frame], fallback_interval_ms: i64) -> FlyTimeSamplingPlan {
+fn build_fly_time_sampling_plan(
+    frames: &[Frame],
+    fallback_interval_ms: i64,
+) -> FlyTimeSamplingPlan {
     let has_fly_time = frames.iter().any(|f| f.osd.fly_time > 0.0);
     let first_fly_time_ms = frames
         .iter()
@@ -1803,23 +2223,36 @@ fn select_nearest_frame_index(
 
 /// Calculate FlightStats from stored TelemetryRecords (for tag regeneration without re-parsing files)
 pub fn calculate_stats_from_records(records: &[crate::models::TelemetryRecord]) -> FlightStats {
-    let duration_secs = records.last().map(|r| r.timestamp_ms as f64 / 1000.0).unwrap_or(0.0)
-        - records.first().map(|r| r.timestamp_ms as f64 / 1000.0).unwrap_or(0.0);
+    let duration_secs = records
+        .last()
+        .map(|r| r.timestamp_ms as f64 / 1000.0)
+        .unwrap_or(0.0)
+        - records
+            .first()
+            .map(|r| r.timestamp_ms as f64 / 1000.0)
+            .unwrap_or(0.0);
 
-    let max_altitude = records.iter()
+    let max_altitude = records
+        .iter()
         .filter_map(|r| r.height.or(r.altitude))
         .fold(0.0_f64, f64::max);
 
-    let max_speed = records.iter()
+    let max_speed = records
+        .iter()
         .filter_map(|r| r.speed)
         .fold(0.0_f64, f64::max);
 
     let avg_speed: f64 = {
         let speeds: Vec<f64> = records.iter().filter_map(|r| r.speed).collect();
-        if speeds.is_empty() { 0.0 } else { speeds.iter().sum::<f64>() / speeds.len() as f64 }
+        if speeds.is_empty() {
+            0.0
+        } else {
+            speeds.iter().sum::<f64>() / speeds.len() as f64
+        }
     };
 
-    let min_battery = records.iter()
+    let min_battery = records
+        .iter()
         .filter_map(|r| r.battery_percent)
         .filter(|&v| v > 0)
         .min()
@@ -1831,7 +2264,9 @@ pub fn calculate_stats_from_records(records: &[crate::models::TelemetryRecord]) 
     let mut prev_lon: Option<f64> = None;
     for r in records {
         if let (Some(lat), Some(lon)) = (r.latitude, r.longitude) {
-            if lat.abs() < 0.0001 && lon.abs() < 0.0001 { continue; }
+            if lat.abs() < 0.0001 && lon.abs() < 0.0001 {
+                continue;
+            }
             if let (Some(plat), Some(plon)) = (prev_lat, prev_lon) {
                 total_distance += haversine_distance(plat, plon, lat, lon);
             }
@@ -1840,14 +2275,16 @@ pub fn calculate_stats_from_records(records: &[crate::models::TelemetryRecord]) 
         }
     }
 
-    let home_location = records.iter()
+    let home_location = records
+        .iter()
         .find_map(|r| match (r.longitude, r.latitude) {
             (Some(lon), Some(lat)) if lat.abs() > 0.0001 || lon.abs() > 0.0001 => Some([lon, lat]),
             _ => None,
         });
 
     let max_distance_from_home = if let Some(home) = home_location {
-        records.iter()
+        records
+            .iter()
             .filter_map(|r| match (r.latitude, r.longitude) {
                 (Some(lat), Some(lon)) => Some(haversine_distance(home[1], home[0], lat, lon)),
                 _ => None,
@@ -1864,8 +2301,16 @@ pub fn calculate_stats_from_records(records: &[crate::models::TelemetryRecord]) 
     FlightStats {
         duration_secs,
         total_distance_m: total_distance,
-        max_altitude_m: if max_altitude.is_finite() { max_altitude } else { 0.0 },
-        max_speed_ms: if max_speed.is_finite() { max_speed } else { 0.0 },
+        max_altitude_m: if max_altitude.is_finite() {
+            max_altitude
+        } else {
+            0.0
+        },
+        max_speed_ms: if max_speed.is_finite() {
+            max_speed
+        } else {
+            0.0
+        },
         avg_speed_ms: avg_speed,
         min_battery,
         home_location,
@@ -1930,12 +2375,16 @@ pub fn run_post_import_steps(
     config: &serde_json::Value,
     profile: &str,
 ) {
-    let tags_enabled = config.get("smart_tags_enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+    let tags_enabled = config
+        .get("smart_tags_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
 
     // 1. Insert smart tags if enabled
     if tags_enabled {
         let tags = if let Some(types) = config.get("enabled_tag_types").and_then(|v| v.as_array()) {
-            let enabled_types: Vec<String> = types.iter()
+            let enabled_types: Vec<String> = types
+                .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
             LogParser::filter_smart_tags(parse_result.tags.clone(), &enabled_types)
@@ -1950,14 +2399,24 @@ pub fn run_post_import_steps(
     // 2. Insert manual tags from re-imported CSV exports (always, regardless of smart_tags_enabled)
     for manual_tag in &parse_result.manual_tags {
         if let Err(e) = db.add_flight_tag(flight_id, manual_tag) {
-            log::warn!("Failed to insert manual tag '{}' for flight {}: {}", manual_tag, flight_id, e);
+            log::warn!(
+                "Failed to insert manual tag '{}' for flight {}: {}",
+                manual_tag,
+                flight_id,
+                e
+            );
         }
     }
 
     // 3. Auto-tag with profile name for non-default profiles
     if profile != "default" {
         if let Err(e) = db.add_flight_tag(flight_id, profile) {
-            log::warn!("Failed to insert profile tag '{}' for flight {}: {}", profile, flight_id, e);
+            log::warn!(
+                "Failed to insert profile tag '{}' for flight {}: {}",
+                profile,
+                flight_id,
+                e
+            );
         }
     }
 
@@ -1985,7 +2444,11 @@ pub fn run_post_import_steps(
     // 7. Restore previously saved user customizations (display_name, notes, color, manual tags)
     if let Some(ref hash) = parse_result.metadata.file_hash {
         if let Err(e) = db.apply_saved_customizations(flight_id, hash) {
-            log::warn!("Failed to restore customizations for flight {}: {}", flight_id, e);
+            log::warn!(
+                "Failed to restore customizations for flight {}: {}",
+                flight_id,
+                e
+            );
         }
     }
 }

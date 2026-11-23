@@ -640,6 +640,15 @@ export function FlightMap({ flightId, track, homeLat, homeLon, durationSecs, tel
     }
   }, [track]);
 
+  const chatReplayRequest = useFlightStore(state => state.chatReplayRequest);
+  useEffect(() => {
+    const store = useFlightStore.getState();
+    if (!chatReplayRequest || store.currentFlightData?.flight.id !== chatReplayRequest.flightId || !track.length || !durationSecs || durationSecs <= 0) return;
+    setIsPlaying(false);
+    const progress = Math.max(0, Math.min(1, chatReplayRequest.elapsedMs / (durationSecs * 1000)));
+    setReplayProgress(progress); store.setMapReplayProgress(progress); store.setChatReplayRequest(null);
+  }, [chatReplayRequest, track, durationSecs]);
+
   useEffect(() => {
     if (!isPlaying) {
       if (replayTimerRef.current) {

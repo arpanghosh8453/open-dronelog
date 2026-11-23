@@ -63,7 +63,9 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # HTTP client for DJI API key fetching
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+futures-util = "0.3"
+ring = "0.17"
 
 # SHA256 hashing for file deduplication
 sha2 = "0.10"
@@ -79,6 +81,7 @@ rand = "0.8"
 # File utilities
 dirs = "5"
 reverse_geocoder = "4.1.1"
+chrono-tz = "0.10"
 
 [features]
 default = ["tauri-app"]

@@ -4,7 +4,7 @@
     "title": "Open DroneLog Generated API Surface",
     "version": "generated",
     "description": "Generated from src-tauri/src/server.rs router declarations.",
-    "x-source-fingerprint": "604bc6bff425b40da0b8072145ff9ecbc900e2f8805f13697018d247401384ac"
+    "x-source-fingerprint": "72af7b48b16b3d820b6b399ab73ad03b609a7c64251adf8dc649f3f929106625"
   },
   "paths": {
     "/api/import": {
@@ -575,17 +575,39 @@
         }
       }
     },
-    "/api/supporter/donation": {
-      "get": {
-        "operationId": "get_donation_acknowledged",
+    "/api/chat/operation": {
+      "post": {
+        "operationId": "operation",
         "responses": {
           "200": {
             "description": "Success"
           }
         }
-      },
+      }
+    },
+    "/api/chat/conversations": {
+      "get": {
+        "operationId": "conversations",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/chat/send": {
       "post": {
-        "operationId": "set_donation_acknowledged",
+        "operationId": "send",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/chat/cancel": {
+      "post": {
+        "operationId": "cancel",
         "responses": {
           "200": {
             "description": "Success"

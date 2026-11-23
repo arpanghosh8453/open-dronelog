@@ -1332,23 +1332,71 @@ export async function removeSupporterBadge(): Promise<boolean> {
   return invoke('remove_supporter_badge') as Promise<boolean>;
 }
 
-/** Get the donation-acknowledged flag from the database. */
-export async function getDonationAcknowledged(): Promise<boolean> {
-  if (isWeb) {
-    return fetchJson<boolean>('/supporter/donation');
-  }
+// Chat uses the same profile boundary in both transports. Credentials never return.
+export async function chatOperation<T>(operation: string, payload: unknown = null): Promise<T> {
+  if (isWeb) return fetchJson<T>('/chat/operation', { method: 'POST', body: JSON.stringify({ operation, payload }) });
   const invoke = await getTauriInvoke();
-  return invoke('get_donation_acknowledged') as Promise<boolean>;
+  return invoke('chat_operation', { profile: getProfileKey('activeProfile') || 'default', operation, payload }) as Promise<T>;
 }
 
-/** Set the donation-acknowledged flag in the database. */
-export async function setDonationAcknowledgedApi(acknowledged: boolean): Promise<boolean> {
+export async function cancelChat(requestId: string, profile = getProfileKey('activeProfile') || 'default', headers = profileHeaders()): Promise<void> {
   if (isWeb) {
-    return fetchJson<boolean>('/supporter/donation', {
-      method: 'POST',
-      body: JSON.stringify({ acknowledged }),
-    });
+    const response = await fetch(`${API_BASE}/chat/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ request_id: requestId }) });
+    if (!response.ok) throw new Error('Unable to stop the response. Check your connection.');
+    return;
   }
   const invoke = await getTauriInvoke();
-  return invoke('set_donation_acknowledged', { acknowledged }) as Promise<boolean>;
+  await invoke('chat_cancel', { profile, requestId });
+}
+
+export async function streamChat(
+  request: import('@/types/chat').ChatRequest,
+  onEvent: (event: import('@/types/chat').ChatEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const profile = getProfileKey('activeProfile') || 'default';
+  const headers = profileHeaders();
+  const stop = () => { void cancelChat(request.request_id, profile, headers).catch(() => {}); };
+  signal.addEventListener('abort', stop, { once: true });
+  try {
+    if (signal.aborted) throw new DOMException('Stopped', 'AbortError');
+    if (!isWeb) {
+      const { Channel } = await import('@tauri-apps/api/core');
+      const channel = new Channel<import('@/types/chat').ChatEvent>();
+      channel.onmessage = (event) => { if (!signal.aborted) onEvent(event); };
+      const invoke = await getTauriInvoke();
+      await invoke('chat_stream', { profile, request, onEvent: channel });
+      return;
+    }
+    const response = await fetch(`${API_BASE}/chat/send`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(request), signal,
+    });
+    if (!response.ok) {
+      if (response.status === 401) { removeProfileKey('profileSession'); _onSessionExpired?.(); }
+      throw new Error((await response.json().catch(() => ({}))).error || `Chat request failed (${response.status})`);
+    }
+    if (!response.body) throw new Error('Streaming is unavailable in this browser.');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let terminal = false;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        if (buffer.length > 2_000_000) throw new Error('Chat event exceeded its size limit.');
+        let newline: number;
+        while ((newline = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newline).trimEnd();
+          buffer = buffer.slice(newline + 1);
+          if (!line.startsWith('data:')) continue;
+          const event = JSON.parse(line.slice(5).trim()) as import('@/types/chat').ChatEvent;
+          if (event.type === 'completed' || event.type === 'error') terminal = true;
+          onEvent(event);
+        }
+      }
+      if (!terminal && !signal.aborted) throw new Error('Connection ended before the response completed. Retry your message.');
+    } finally { reader.releaseLock(); }
+  } finally { signal.removeEventListener('abort', stop); }
 }

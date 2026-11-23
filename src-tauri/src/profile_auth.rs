@@ -99,7 +99,11 @@ pub fn set_password(
 }
 
 /// Remove the password for a profile (requires current password).
-pub fn remove_password(data_dir: &Path, profile: &str, current_password: &str) -> Result<(), String> {
+pub fn remove_password(
+    data_dir: &Path,
+    profile: &str,
+    current_password: &str,
+) -> Result<(), String> {
     let mut map = load_auth(data_dir);
     match map.get(profile) {
         Some(hash) if verify_password(current_password, hash) => {
@@ -118,7 +122,11 @@ pub fn remove_password(data_dir: &Path, profile: &str, current_password: &str) -
 
 /// Verify that `password` is correct for `profile`.
 /// Returns `Ok(())` on success, `Err` with a user-facing message otherwise.
-pub fn verify_profile_password(data_dir: &Path, profile: &str, password: &str) -> Result<(), String> {
+pub fn verify_profile_password(
+    data_dir: &Path,
+    profile: &str,
+    password: &str,
+) -> Result<(), String> {
     let map = load_auth(data_dir);
     match map.get(profile) {
         Some(hash) => {

@@ -273,3 +273,16 @@ body.theme-light .sidebar-collapsed-toggle-btn:hover {
     scroll-behavior: auto !important;
   }
 }
+
+/* Persistent supporter invitation: distinct blue surface within the app palette. */
+.support-banner { flex-shrink:0; width:100%; border-bottom:1px solid rgb(var(--drone-primary) / .42); background:color-mix(in srgb, rgb(var(--drone-primary)) 17%, rgb(var(--drone-secondary))); color:var(--ui-text); }
+.support-banner-content { display:flex; justify-content:center; align-items:center; gap:10px; padding:14px 20px; font-size:14px; line-height:1.6; }
+.support-banner-content>svg { width:16px; height:16px; flex-shrink:0; color:rgb(var(--drone-primary)); }
+.support-banner p { margin:0; text-wrap:pretty; }
+.support-banner a { color:rgb(var(--drone-primary)); font-weight:600; text-underline-offset:3px; text-decoration:underline; text-decoration-color:rgb(var(--drone-primary) / .35); }
+.support-banner a:hover { text-decoration-color:currentColor; }
+.support-banner a.support-banner-action { display:inline-block; padding:1px 8px; margin:-1px 0; border:1px solid rgb(var(--drone-primary) / .42); border-radius:6px; background:rgb(var(--drone-primary) / .1); text-decoration:none; white-space:nowrap; }
+.support-banner a.support-banner-action:hover { background:rgb(var(--drone-primary) / .2); border-color:rgb(var(--drone-primary) / .65); }
+.support-banner a:focus-visible { outline:2px solid rgb(var(--drone-primary)); outline-offset:3px; border-radius:2px; }
+.support-banner-separator { display:inline-block; margin:0 12px; color:var(--ui-secondary); }
+@media(max-width:767px) { .support-banner-content { padding:10px 16px; font-size:14px; text-align:center; } }

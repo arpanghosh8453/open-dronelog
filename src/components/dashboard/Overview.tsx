@@ -90,7 +90,7 @@ export function Overview({ stats, flights, unitPrefs, onSelectFlight }: Overview
   const maintenanceLastReset = useFlightStore((state) => state.maintenanceLastReset);
   const setMaintenanceThreshold = useFlightStore((state) => state.setMaintenanceThreshold);
   const performMaintenance = useFlightStore((state) => state.performMaintenance);
-  const donationAcknowledged = useFlightStore((state) => state.donationAcknowledged);
+  const supporterBadgeActive = useFlightStore((state) => state.supporterBadgeActive);
   const batteryPairIndex = useBatteryPairIndex();
   const resolvedTheme = useMemo(() => resolveThemeMode(themeMode), [themeMode]);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -291,6 +291,24 @@ export function Overview({ stats, flights, unitPrefs, onSelectFlight }: Overview
     };
   }, [filteredFlights, stats.maxDistanceFromHomeM, stats.topDistanceFlights, getDroneDisplayName, droneNameMap, getBatteryDisplayName, batteryNameMap, getDisplaySerial, hideSerialNumbers, batteryPairIndex]);
 
+  const droneDonutData = useMemo(() => {
+    const ranked = filteredStats.dronesUsed.map(d => ({
+      name: d.droneSerial ? `drone:${d.droneSerial}` : `drone-model:${d.droneModel}:${d.displayLabel}`,
+      displayName: d.displayLabel,
+      value: d.flightCount,
+      decommissioned: isDecommissioned(d.displayLabel),
+    })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+    const topDrones = ranked.slice(0, 15);
+    const remaining = ranked.slice(15);
+    if (remaining.length) topDrones.push({
+      name: 'drone-other',
+      displayName: t('overview.otherDrones'),
+      value: remaining.reduce((sum, drone) => sum + drone.value, 0),
+      decommissioned: false,
+    });
+    return topDrones;
+  }, [filteredStats.dronesUsed, t]);
+
   const batteryDonutData = useMemo(() => {
     const grouped = new Map<string, { value: number; displayName: string; decommissioned: boolean }>();
     for (const battery of filteredStats.batteriesUsed) {
@@ -303,13 +321,24 @@ export function Overview({ stats, flights, unitPrefs, onSelectFlight }: Overview
         decommissioned: isDecommissioned(label),
       });
     }
-    return Array.from(grouped.entries()).map(([groupKey, item]) => ({
+    const ranked = Array.from(grouped.entries()).map(([groupKey, item]) => ({
       name: `battery-group:${groupKey}`,
       displayName: item.displayName,
       value: item.value,
       decommissioned: item.decommissioned,
-    }));
-  }, [filteredStats.batteriesUsed, batteryPairIndex, getBatteryDisplayName]);
+    })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+    const topBatteries = ranked.slice(0, 15);
+    const remaining = ranked.slice(15);
+    if (remaining.length > 0) {
+      topBatteries.push({
+        name: 'battery-other',
+        displayName: t('overview.otherBatteries'),
+        value: remaining.reduce((sum, battery) => sum + battery.value, 0),
+        decommissioned: false,
+      });
+    }
+    return topBatteries;
+  }, [filteredStats.batteriesUsed, batteryPairIndex, getBatteryDisplayName, t]);
 
   const filteredTopDistanceFlights = useMemo(() => {
     if (!stats.topDistanceFlights?.length) return [] as typeof stats.topDistanceFlights;
@@ -388,15 +417,7 @@ export function Overview({ stats, flights, unitPrefs, onSelectFlight }: Overview
         <div className="card p-4">
           <h3 className="text-sm font-semibold text-white mb-3">{t('overview.flightsByDrone')}</h3>
           <DonutChart
-            data={filteredStats.dronesUsed.map((d) => ({
-              // Keep a unique internal key so masked labels do not collapse into one segment.
-              name: d.droneSerial
-                ? `drone:${d.droneSerial}`
-                : `drone-model:${d.droneModel}:${d.displayLabel}`,
-              displayName: d.displayLabel,
-              value: d.flightCount,
-              decommissioned: isDecommissioned(d.displayLabel),
-            }))}
+            data={droneDonutData}
             emptyMessage={t('overview.noDroneData')}
           />
         </div>
@@ -583,7 +604,7 @@ export function Overview({ stats, flights, unitPrefs, onSelectFlight }: Overview
         />
       )}
 
-      {!donationAcknowledged && (
+      {!supporterBadgeActive && (
         <div className="mt-6 mb-2 mx-auto max-w-4xl rounded-lg border border-gray-200 dark:border-gray-700/50 bg-gray-50 dark:bg-white/[0.03] px-5 py-4 sm:px-8">
           <p className="text-center text-xs leading-relaxed text-gray-500 dark:text-gray-500 sm:text-sm">
             {t('overview.donationNote')}{' '}

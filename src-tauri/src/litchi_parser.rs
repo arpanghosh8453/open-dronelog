@@ -12,7 +12,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 
 use crate::database::Database;
 use crate::models::{FlightMetadata, FlightStats, TelemetryPoint};
-use crate::parser::{ParseResult, ParserError, LogParser};
+use crate::parser::{LogParser, ParseResult, ParserError};
 
 /// Unit type detected from column headers
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -144,10 +144,12 @@ impl<'a> LitchiParser<'a> {
             if let Some(Ok(first_line)) = reader.lines().next() {
                 let lower = first_line.to_lowercase();
                 // Litchi CSVs have these characteristic columns
-                return lower.contains("latitude") 
+                return lower.contains("latitude")
                     && lower.contains("longitude")
                     && (lower.contains("datetime(utc)") || lower.contains("datetime(local)"))
-                    && (lower.contains("dronetype") || lower.contains("planename") || lower.contains("isflying"));
+                    && (lower.contains("dronetype")
+                        || lower.contains("planename")
+                        || lower.contains("isflying"));
             }
         }
         false
@@ -168,7 +170,10 @@ impl<'a> LitchiParser<'a> {
             .ok_or_else(|| ParserError::Parse("Empty CSV file".to_string()))?
             .map_err(|e| ParserError::Parse(format!("Failed to read header: {}", e)))?;
 
-        let headers: Vec<String> = header_line.split(',').map(|s| s.trim().to_string()).collect();
+        let headers: Vec<String> = header_line
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
         let col_map = ColumnMap::new(&headers);
 
         // Parse data rows
@@ -201,7 +206,8 @@ impl<'a> LitchiParser<'a> {
                 first_row_data = Some(fields.iter().map(|s| s.to_string()).collect());
 
                 // Extract battery full capacity from first row only (later rows report 0)
-                battery_full_capacity = col_map.get_f64(&fields, "CENTER_BATTERY.fullCapacity")
+                battery_full_capacity = col_map
+                    .get_f64(&fields, "CENTER_BATTERY.fullCapacity")
                     .filter(|&v| v > 0.0);
             }
             last_row_data = Some(fields.iter().map(|s| s.to_string()).collect());
@@ -240,7 +246,9 @@ impl<'a> LitchiParser<'a> {
             .map(|v| v.iter().map(|s| s.as_str()).collect())
             .unwrap_or_default();
 
-        let metadata = self.extract_metadata(file_path, file_hash, &col_map, &first_row, &last_row, &points)?;
+        let metadata = self.extract_metadata(
+            file_path, file_hash, &col_map, &first_row, &last_row, &points,
+        )?;
         let stats = self.calculate_stats(&points, &col_map, &first_row, &last_row);
 
         log::info!(
@@ -257,11 +265,24 @@ impl<'a> LitchiParser<'a> {
         tags.insert(0, "Litchi".to_string()); // Add Litchi tag at the beginning
         log::info!("Generated smart tags: {:?}", tags);
 
-        Ok(ParseResult { metadata, points, tags, manual_tags: Vec::new(), notes: None, color: None, messages: Vec::new() })
+        Ok(ParseResult {
+            metadata,
+            points,
+            tags,
+            manual_tags: Vec::new(),
+            notes: None,
+            color: None,
+            messages: Vec::new(),
+        })
     }
 
     /// Parse a single CSV row into a TelemetryPoint
-    fn parse_row(&self, col_map: &ColumnMap, row: &[&str], battery_full_capacity: Option<f64>) -> TelemetryPoint {
+    fn parse_row(
+        &self,
+        col_map: &ColumnMap,
+        row: &[&str],
+        battery_full_capacity: Option<f64>,
+    ) -> TelemetryPoint {
         let get_any_f64 = |fields: &[&str]| fields.iter().find_map(|f| col_map.get_f64(row, f));
 
         // Parse timestamp - prefer time(millisecond) as relative ms from flight start
@@ -271,15 +292,24 @@ impl<'a> LitchiParser<'a> {
             // time(millisecond) column exists - use it, default to 0 if empty
             col_map
                 .get_str(row, "time")
-                .and_then(|s| if s.trim().is_empty() { None } else { s.parse::<i64>().ok() })
+                .and_then(|s| {
+                    if s.trim().is_empty() {
+                        None
+                    } else {
+                        s.parse::<i64>().ok()
+                    }
+                })
                 .unwrap_or(0)
         } else {
             // No time column - use datetime as epoch ms (will be normalized to relative later)
-            col_map.get_str(row, "datetime").and_then(|dt| {
-                NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
-                    .ok()
-                    .map(|ndt| ndt.and_utc().timestamp_millis())
-            }).unwrap_or(0)
+            col_map
+                .get_str(row, "datetime")
+                .and_then(|dt| {
+                    NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
+                        .ok()
+                        .map(|ndt| ndt.and_utc().timestamp_millis())
+                })
+                .unwrap_or(0)
         };
 
         TelemetryPoint {
@@ -318,22 +348,30 @@ impl<'a> LitchiParser<'a> {
             // Power
             battery_percent: col_map.get_i32(row, "remainPowerPercent"),
             battery_voltage: col_map.get_f64(row, "voltage").or(
-                col_map.get_f64(row, "currentVoltage").map(|v| if v > 1000.0 { v / 1000.0 } else { v }) // currentVoltage is in mV
+                col_map
+                    .get_f64(row, "currentVoltage")
+                    .map(|v| if v > 1000.0 { v / 1000.0 } else { v }), // currentVoltage is in mV
             ),
             battery_current: col_map.get_f64(row, "currentCurrent"),
-            battery_temp: col_map.get_f64(row, "batteryTemperature")
+            battery_temp: col_map
+                .get_f64(row, "batteryTemperature")
                 .map(|v| if v > 200.0 { v / 10.0 - 273.15 } else { v }) // Convert tenths-of-Kelvin to Celsius
                 .or(col_map.get_f64(row, "temperature")), // temperature(F) is auto-converted by unit system
             cell_voltages: {
                 // Parse Battery_Cell1..6 columns (values in millivolts, convert to volts)
                 let cells: Vec<f64> = (1..=6)
                     .filter_map(|i| {
-                        col_map.get_f64(row, &format!("Battery_Cell{}", i))
+                        col_map
+                            .get_f64(row, &format!("Battery_Cell{}", i))
                             .filter(|&v| v > 0.0)
                             .map(|v| if v > 100.0 { v / 1000.0 } else { v }) // mV to V
                     })
                     .collect();
-                if cells.is_empty() { None } else { Some(cells) }
+                if cells.is_empty() {
+                    None
+                } else {
+                    Some(cells)
+                }
             },
 
             // Status
@@ -356,7 +394,8 @@ impl<'a> LitchiParser<'a> {
 
             // Battery capacity
             battery_full_capacity,
-            battery_remained_capacity: col_map.get_f64(row, "CENTER_BATTERY.remainedCapacity")
+            battery_remained_capacity: col_map
+                .get_f64(row, "CENTER_BATTERY.remainedCapacity")
                 .or(col_map.get_f64(row, "currentElectricity"))
                 .filter(|&v| v > 0.0),
         }
@@ -386,22 +425,18 @@ impl<'a> LitchiParser<'a> {
             .to_string();
 
         // Extract start time from first row
-        let start_time = col_map
-            .get_str(first_row, "datetime")
-            .and_then(|dt| {
-                NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
-                    .ok()
-                    .map(|ndt| DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
-            });
+        let start_time = col_map.get_str(first_row, "datetime").and_then(|dt| {
+            NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
+                .ok()
+                .map(|ndt| DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
+        });
 
         // Extract end time from last row
-        let end_time = col_map
-            .get_str(last_row, "datetime")
-            .and_then(|dt| {
-                NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
-                    .ok()
-                    .map(|ndt| DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
-            });
+        let end_time = col_map.get_str(last_row, "datetime").and_then(|dt| {
+            NaiveDateTime::parse_from_str(&dt, "%Y-%m-%d %H:%M:%S%.f")
+                .ok()
+                .map(|ndt| DateTime::<Utc>::from_naive_utc_and_offset(ndt, Utc))
+        });
 
         // Calculate duration
         let duration_secs = match (start_time, end_time) {
@@ -409,7 +444,11 @@ impl<'a> LitchiParser<'a> {
             _ => {
                 // Fallback: use timestamps from points
                 if points.len() >= 2 {
-                    Some((points.last().unwrap().timestamp_ms - points.first().unwrap().timestamp_ms) as f64 / 1000.0)
+                    Some(
+                        (points.last().unwrap().timestamp_ms - points.first().unwrap().timestamp_ms)
+                            as f64
+                            / 1000.0,
+                    )
                 } else {
                     None
                 }
@@ -420,7 +459,10 @@ impl<'a> LitchiParser<'a> {
         let total_distance = self.calculate_total_distance(points);
 
         // Find max altitude and speed
-        let max_altitude = points.iter().filter_map(|p| p.altitude).fold(0.0f64, f64::max);
+        let max_altitude = points
+            .iter()
+            .filter_map(|p| p.altitude)
+            .fold(0.0f64, f64::max);
         let max_speed = points.iter().filter_map(|p| p.speed).fold(0.0f64, f64::max);
 
         // Extract home location
@@ -441,11 +483,15 @@ impl<'a> LitchiParser<'a> {
             display_name,
             file_hash: Some(file_hash.to_string()),
             drone_model,
-            drone_serial: col_map.get_str(first_row, "FlyControllerSerialNumber")
+            drone_serial: col_map
+                .get_str(first_row, "FlyControllerSerialNumber")
                 .map(|s| s.trim().to_uppercase())
                 .filter(|s| !s.is_empty()),
-            aircraft_name: col_map.get_str(first_row, "Planename").filter(|s| !s.is_empty()),
-            battery_serial: col_map.get_str(first_row, "BatterySerialNumber")
+            aircraft_name: col_map
+                .get_str(first_row, "Planename")
+                .filter(|s| !s.is_empty()),
+            battery_serial: col_map
+                .get_str(first_row, "BatterySerialNumber")
                 .map(|s| s.trim().to_uppercase())
                 .filter(|s| !s.is_empty()),
             cycle_count: None,
@@ -474,17 +520,25 @@ impl<'a> LitchiParser<'a> {
         last_row: &[&str],
     ) -> FlightStats {
         let duration_secs = if points.len() >= 2 {
-            (points.last().unwrap().timestamp_ms - points.first().unwrap().timestamp_ms) as f64 / 1000.0
+            (points.last().unwrap().timestamp_ms - points.first().unwrap().timestamp_ms) as f64
+                / 1000.0
         } else {
             0.0
         };
 
         let total_distance_m = self.calculate_total_distance(points);
-        let max_altitude_m = points.iter().filter_map(|p| p.altitude).fold(0.0f64, f64::max);
+        let max_altitude_m = points
+            .iter()
+            .filter_map(|p| p.altitude)
+            .fold(0.0f64, f64::max);
         let max_speed_ms = points.iter().filter_map(|p| p.speed).fold(0.0f64, f64::max);
 
         // Average speed (excluding zero speeds)
-        let speeds: Vec<f64> = points.iter().filter_map(|p| p.speed).filter(|&s| s > 0.1).collect();
+        let speeds: Vec<f64> = points
+            .iter()
+            .filter_map(|p| p.speed)
+            .filter(|&s| s > 0.1)
+            .collect();
         let avg_speed_ms = if !speeds.is_empty() {
             speeds.iter().sum::<f64>() / speeds.len() as f64
         } else {
@@ -503,11 +557,11 @@ impl<'a> LitchiParser<'a> {
         let max_distance_from_home_m = if let Some([home_lon, home_lat]) = home_location {
             points
                 .iter()
-                .filter_map(|p| {
-                    match (p.latitude, p.longitude) {
-                        (Some(lat), Some(lon)) => Some(self.haversine_distance(home_lat, home_lon, lat, lon)),
-                        _ => None,
+                .filter_map(|p| match (p.latitude, p.longitude) {
+                    (Some(lat), Some(lon)) => {
+                        Some(self.haversine_distance(home_lat, home_lon, lat, lon))
                     }
+                    _ => None,
                 })
                 .fold(0.0f64, f64::max)
         } else {
@@ -517,7 +571,8 @@ impl<'a> LitchiParser<'a> {
         // Battery stats
         let start_battery_percent = col_map.get_i32(first_row, "remainPowerPercent");
         let end_battery_percent = col_map.get_i32(last_row, "remainPowerPercent");
-        let start_battery_temp = col_map.get_f64(first_row, "batteryTemperature")
+        let start_battery_temp = col_map
+            .get_f64(first_row, "batteryTemperature")
             .or(col_map.get_f64(first_row, "temperature"));
 
         // Min battery is the lowest battery percentage during flight
