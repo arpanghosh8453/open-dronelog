@@ -960,5 +960,30 @@
     "exportReport": "보고서 내보내기",
     "reportSaved": "보고서가 저장되었습니다.",
     "recordedEvents": "기록된 이벤트 ({{count}})"
+  },
+  "mcp": {
+    "title": "외부 에이전트",
+    "description": "Codex, Claude Code 또는 다른 MCP 클라이언트를 {{profile}}에 연결합니다. 읽기 전용으로 접근합니다.",
+    "readOnly": "읽기 전용",
+    "enable": "로컬 MCP 서버 활성화",
+    "dockerDisabled": "서버 설정에서 비활성화되어 있습니다. 운영자가 ODL_MCP_ENABLED=true를 설정하고 엔드포인트를 확인해야 합니다.",
+    "localHelp": "에이전트가 연결된 동안 Open DroneLog를 실행하고 이 프로필의 잠금을 해제해 두세요.",
+    "endpoint": "MCP 엔드포인트",
+    "name": "연결 이름",
+    "namePlaceholder": "예: 노트북의 Claude Code",
+    "generate": "토큰 생성",
+    "token": "새 Bearer 토큰",
+    "oneTime": "지금 토큰을 복사하세요. 한 번만 표시되고 90일 후 만료되며 {{profile}}에서만 사용할 수 있습니다.",
+    "copy": "복사",
+    "copied": "복사됨",
+    "configure": "클라이언트 설정",
+    "envHelp": "에이전트 환경의 ODL_MCP_TOKEN에 이 토큰을 설정한 후 아래 구성을 추가하세요.",
+    "connections": "페어링된 에이전트",
+    "noConnections": "이 프로필에 페어링된 에이전트가 없습니다.",
+    "revoke": "취소",
+    "expires": "만료: {{date}}",
+    "loadFailed": "MCP 설정을 불러올 수 없습니다. 설정을 다시 여세요.",
+    "copyFailed": "복사하지 못했습니다. 텍스트를 선택해 직접 복사하세요.",
+    "limitHelp": "이 프로필에는 활성 연결이 10개 있습니다. 다른 토큰을 생성하려면 페어링된 에이전트를 취소하세요."
   }
 }

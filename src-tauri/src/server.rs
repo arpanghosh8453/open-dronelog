@@ -80,6 +80,18 @@ impl WebAppState {
         Ok(db)
     }
 
+    /// MCP never opens/migrates a database as a consequence of a tool request.
+    pub fn db_for_mcp_profile(&self, profile: &str) -> Result<Arc<Database>, String> {
+        self.databases
+            .read()
+            .map_err(|_| "Database pool unavailable")?
+            .get(profile)
+            .cloned()
+            .ok_or_else(|| {
+                "Open this profile in Open DroneLog before connecting an external agent".into()
+            })
+    }
+
     /// Remove a cached connection (used after profile deletion).
     pub fn evict_profile(&self, profile: &str) {
         self.databases.write().unwrap().remove(profile);
@@ -2797,14 +2809,77 @@ async fn remove_supporter_badge(
 // SERVER SETUP
 // ============================================================================
 
+#[derive(Deserialize)]
+struct McpOperation {
+    profile: String,
+    operation: String,
+    #[serde(default)]
+    payload: serde_json::Value,
+}
+async fn mcp_operation(
+    axum::Extension(mcp): axum::Extension<Arc<crate::mcp::Server>>,
+    pdb: ProfileDb,
+    Json(op): Json<McpOperation>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    if op.profile != pdb.profile {
+        return Err(err_response(
+            StatusCode::FORBIDDEN,
+            "Profile changed; reopen Settings",
+        ));
+    }
+    mcp.operation(&pdb.profile, &op.operation, op.payload)
+        .await
+        .map(Json)
+        .map_err(|e| err_response(StatusCode::BAD_REQUEST, e))
+}
+async fn reject_mcp_credentials_on_api(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    if request.uri().path().starts_with("/api/") && request.headers().contains_key("authorization")
+    {
+        return err_response(StatusCode::FORBIDDEN,"MCP bearer tokens are accepted only at /mcp; application operations require an application session").into_response();
+    }
+    next.run(request).await
+}
+
 /// Build the Axum router with all API routes
 pub fn build_router(state: WebAppState) -> Router {
+    build_router_with_mcp(
+        state,
+        crate::mcp::web_enabled(),
+        crate::mcp::public_endpoint(),
+    )
+}
+
+pub(crate) fn build_router_with_mcp(
+    state: WebAppState,
+    enabled: bool,
+    endpoint: Result<Option<String>, String>,
+) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    let lookup = state.clone();
+    if endpoint.is_err() {
+        log::error!("Invalid ODL_MCP_PUBLIC_URL; MCP is disabled");
+    }
+    let mcp = crate::mcp::Server::new(
+        state.data_dir.clone(),
+        crate::mcp::Mode::Web,
+        enabled && endpoint.is_ok(),
+        endpoint.ok().flatten().or(Some("/mcp".into())),
+        Arc::new(move |profile| lookup.db_for_mcp_profile(profile)),
+    );
+    let routes = Router::new()
+        .route(
+            "/api/mcp/operation",
+            post(mcp_operation).layer(DefaultBodyLimit::max(65536)),
+        )
+        .layer(axum::Extension(mcp.clone()))
         .route("/api/import", post(import_log))
         .route("/api/manual_flight", post(create_manual_flight))
         .route("/api/flights", get(get_flights))
@@ -2893,7 +2968,13 @@ pub fn build_router(state: WebAppState) -> Router {
         .merge(crate::chat::web::router())
         .layer(cors)
         .layer(DefaultBodyLimit::max(250 * 1024 * 1024)) // 250 MB
-        .with_state(state)
+        .with_state(state);
+    let routes = routes.layer(axum::middleware::from_fn(reject_mcp_credentials_on_api));
+    if enabled {
+        routes.merge(mcp.router())
+    } else {
+        routes
+    }
 }
 
 /// Start the Axum web server
@@ -2978,6 +3059,24 @@ pub async fn start_server(data_dir: PathBuf) -> Result<(), Box<dyn std::error::E
         sessions: Arc::new(SessionStore::new()),
         master_password_hash,
     };
+
+    // Warm previously paired profiles during ordinary application startup. MCP
+    // requests themselves only borrow cached databases and never run migrations.
+    if crate::mcp::web_enabled() {
+        if let Ok(access) = crate::mcp::storage::inspect(&state.data_dir) {
+            let profiles: std::collections::HashSet<_> = access
+                .grants
+                .iter()
+                .filter(|g| crate::mcp::storage::is_current(&state.data_dir, g).unwrap_or(false))
+                .map(|g| g.profile.clone())
+                .collect();
+            for profile in profiles {
+                if state.db_for_profile(&profile).is_err() {
+                    log::warn!("A paired MCP profile could not be opened during startup");
+                }
+            }
+        }
+    }
 
     // Start the scheduled sync if SYNC_INTERVAL and SYNC_LOGS_PATH are configured
     if let (Ok(sync_path), Ok(sync_interval)) = (

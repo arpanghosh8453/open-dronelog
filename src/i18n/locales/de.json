@@ -960,5 +960,30 @@
     "exportReport": "Bericht exportieren",
     "reportSaved": "Bericht gespeichert.",
     "recordedEvents": "Aufgezeichnete Ereignisse ({{count}})"
+  },
+  "mcp": {
+    "title": "Externe Agenten",
+    "description": "Codex, Claude Code oder einen anderen MCP-Client mit {{profile}} verbinden. Der Zugriff ist schreibgeschützt.",
+    "readOnly": "Nur lesen",
+    "enable": "Lokalen MCP-Server aktivieren",
+    "dockerDisabled": "Durch die Serverkonfiguration deaktiviert. Der Betreiber muss ODL_MCP_ENABLED=true setzen und die Endpunkteinstellungen prüfen.",
+    "localHelp": "Open DroneLog muss laufen und dieses Profil entsperrt bleiben, solange der Agent verbunden ist.",
+    "endpoint": "MCP-Endpunkt",
+    "name": "Verbindungsname",
+    "namePlaceholder": "z. B. Claude Code Laptop",
+    "generate": "Token erstellen",
+    "token": "Neues Bearer-Token",
+    "oneTime": "Dieses Token jetzt kopieren. Es wird nur einmal angezeigt, läuft nach 90 Tagen ab und gilt nur für {{profile}}.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "configure": "Client-Konfiguration",
+    "envHelp": "ODL_MCP_TOKEN in der Umgebung des Agenten auf dieses Token setzen und die folgende Konfiguration hinzufügen.",
+    "connections": "Verbundene Agenten",
+    "noConnections": "Keine Agenten mit diesem Profil verbunden.",
+    "revoke": "Widerrufen",
+    "expires": "Gültig bis {{date}}",
+    "loadFailed": "MCP-Einstellungen konnten nicht geladen werden. Einstellungen erneut öffnen.",
+    "copyFailed": "Kopieren fehlgeschlagen. Text auswählen und manuell kopieren.",
+    "limitHelp": "Dieses Profil hat 10 aktive Verbindungen. Widerrufen Sie einen verbundenen Agenten, bevor Sie ein weiteres Token erstellen."
   }
 }

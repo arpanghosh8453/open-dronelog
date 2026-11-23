@@ -3554,6 +3554,7 @@ pub fn delete_profile(data_dir: &std::path::Path, profile: &str) -> Result<(), S
 
     validate_profile_name(profile)?;
     crate::chat::cancel_profile(data_dir, profile);
+    crate::mcp::storage::revoke(data_dir, profile, None)?;
     crate::chat::storage::remove(data_dir, profile)?;
     let db_path = data_dir.join(format!("flights_{}.db", profile));
     if db_path.exists() {

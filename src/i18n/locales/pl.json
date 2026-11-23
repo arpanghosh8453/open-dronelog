@@ -958,5 +958,30 @@
     "exportReport": "Eksportuj raport",
     "reportSaved": "Raport zapisany.",
     "recordedEvents": "Zarejestrowane zdarzenia ({{count}})"
+  },
+  "mcp": {
+    "title": "Agenci zewnętrzni",
+    "description": "Połącz Codex, Claude Code lub innego klienta MCP z profilem {{profile}}. Dostęp jest tylko do odczytu.",
+    "readOnly": "Tylko odczyt",
+    "enable": "Włącz lokalny serwer MCP",
+    "dockerDisabled": "Wyłączone w konfiguracji serwera. Operator musi ustawić ODL_MCP_ENABLED=true i sprawdzić punkt końcowy.",
+    "localHelp": "Podczas połączenia agenta Open DroneLog musi działać, a ten profil musi być odblokowany.",
+    "endpoint": "Punkt końcowy MCP",
+    "name": "Nazwa połączenia",
+    "namePlaceholder": "np. Claude Code laptop",
+    "generate": "Wygeneruj token",
+    "token": "Nowy token Bearer",
+    "oneTime": "Skopiuj token teraz. Jest wyświetlany tylko raz, wygasa po 90 dniach i działa wyłącznie z profilem {{profile}}.",
+    "copy": "Kopiuj",
+    "copied": "Skopiowano",
+    "configure": "Konfiguracja klienta",
+    "envHelp": "Ustaw ODL_MCP_TOKEN w środowisku agenta na ten token, a następnie dodaj poniższą konfigurację.",
+    "connections": "Sparowani agenci",
+    "noConnections": "Brak agentów sparowanych z tym profilem.",
+    "revoke": "Unieważnij",
+    "expires": "Wygasa {{date}}",
+    "loadFailed": "Nie można wczytać ustawień MCP. Otwórz Ustawienia ponownie.",
+    "copyFailed": "Nie można skopiować. Zaznacz tekst i skopiuj go ręcznie.",
+    "limitHelp": "Ten profil ma 10 aktywnych połączeń. Unieważnij sparowanego agenta przed wygenerowaniem kolejnego tokenu."
   }
 }

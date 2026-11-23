@@ -1,7 +1,12 @@
 {
-  "sourceFingerprint": "72af7b48b16b3d820b6b399ab73ad03b609a7c64251adf8dc649f3f929106625",
+  "sourceFingerprint": "fb64f88f0dffcecfb18fadb7c745e077c689b38110a61dfa8b20cd9cfb1ef7fe",
   "sourceFile": "src-tauri/src/server.rs",
   "routes": [
+    {
+      "path": "/api/mcp/operation",
+      "method": "POST",
+      "handler": "mcp_operation"
+    },
     {
       "path": "/api/import",
       "method": "POST",
@@ -311,6 +316,21 @@
       "path": "/api/chat/cancel",
       "method": "POST",
       "handler": "cancel"
+    },
+    {
+      "path": "/mcp",
+      "method": "POST",
+      "handler": "rpc"
+    },
+    {
+      "path": "/mcp",
+      "method": "GET",
+      "handler": "unsupported"
+    },
+    {
+      "path": "/mcp",
+      "method": "DELETE",
+      "handler": "unsupported"
     }
   ]
 }

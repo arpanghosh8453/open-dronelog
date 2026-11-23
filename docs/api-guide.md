@@ -526,3 +526,11 @@ SSE events have a `type`: `conversation`, `text_delta`, `tool_started`, `result`
 Tauri commands: `chat_operation(profile, operation, payload)`, `chat_stream(profile, request, on_event)` with a Tauri channel, and `chat_cancel(profile, request_id)`.
 
 See [chat.md](chat.md) for tool schemas, encrypted storage and deployment details.
+
+## MCP external agents
+
+`POST /mcp` provides authenticated, read-only MCP Streamable HTTP when `ODL_MCP_ENABLED=true`. Each bearer grant is fixed to one profile; `X-Profile` cannot override it. MCP bearer tokens cannot authenticate any `/api/` operation. Unsupported GET/DELETE streams return 405 after authentication; sessions and standalone SSE streams are not used.
+
+`POST /api/mcp/operation` is the app-authenticated management endpoint. Body: `{ "profile": "default", "operation": "status", "payload": null }`. Operations are `status`, `generate` (payload `{name, timezone}`), and `revoke` (payload `{id}`). Docker enablement is controlled only by the environment. These operations are not MCP tools. Desktop uses the `mcp_operation` Tauri command and additionally permits `enable` with a boolean payload.
+
+See [MCP access](mcp.md) for pairing, supported protocol versions, client configurations, read-only restrictions and limits.

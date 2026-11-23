@@ -1400,3 +1400,21 @@ export async function streamChat(
     } finally { reader.releaseLock(); }
   } finally { signal.removeEventListener('abort', stop); }
 }
+
+// MCP grants use application authentication here; agent bearer tokens only work at /mcp.
+export interface McpConnection {
+  id: string; name: string; profile: string; timezone: string; created_at: string; expires_at: string;
+}
+export interface McpStatus {
+  enabled: boolean; mode: 'desktop' | 'web'; profile: string; endpoint: string | null;
+  read_only: boolean; tokens: McpConnection[]; protocol_versions: string[];
+}
+export async function mcpOperation<T>(profile: string, operation: string, payload: unknown = null): Promise<T> {
+  if (isWeb) return fetchJson<T>('/mcp/operation', { method: 'POST', body: JSON.stringify({ profile, operation, payload }) });
+  const invoke = await getTauriInvoke();
+  return invoke('mcp_operation', { profile, operation, payload }) as Promise<T>;
+}
+export function absoluteMcpEndpoint(endpoint: string | null): string {
+  if (!endpoint) return '';
+  return new URL(endpoint, new URL(API_BASE, window.location.href)).href;
+}

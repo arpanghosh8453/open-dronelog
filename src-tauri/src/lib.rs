@@ -6,6 +6,7 @@ pub mod database;
 pub mod dronedeploy_parser;
 pub mod dronelogbook_parser;
 pub mod litchi_parser;
+pub mod mcp;
 pub mod models;
 pub mod parser;
 pub mod plugins;

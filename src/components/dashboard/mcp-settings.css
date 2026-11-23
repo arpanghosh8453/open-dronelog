@@ -1,0 +1,43 @@
+.mcp-settings { border-top: 1px solid var(--ui-border); padding-top: 16px; color: var(--ui-text); font-size: 12px; }
+.mcp-settings .mcp-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.mcp-settings h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 14px; font-weight: 600; }
+.mcp-settings h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+.mcp-settings p { margin: 0; line-height: 1.55; color: var(--ui-secondary); overflow-wrap: anywhere; }
+.mcp-settings .mcp-readonly { flex: none; padding: 2px 7px; border: 1px solid var(--ui-border); border-radius: 9999px; font-size: 10px; color: var(--ui-secondary); }
+.mcp-settings .mcp-enable { display: flex; align-items: center; gap: 8px; margin-top: 12px; cursor: pointer; }
+.mcp-settings input[type='checkbox'] { width: 14px; height: 14px; accent-color: var(--ui-button); }
+.mcp-settings .mcp-help { margin-top: 7px; font-size: 11px; }
+.mcp-settings .mcp-field, .mcp-settings .mcp-generate, .mcp-settings .mcp-fresh { margin-top: 14px; }
+.mcp-settings label:not(.mcp-enable) { display: block; margin-bottom: 5px; color: var(--ui-secondary); font-size: 11px; }
+.mcp-settings .mcp-copy-row { display: flex; align-items: stretch; gap: 7px; }
+.mcp-settings input:not([type='checkbox']), .mcp-settings textarea { min-width: 0; width: 100%; border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-input); color: var(--ui-text); padding: 7px 9px; font: inherit; }
+.mcp-settings #mcp-endpoint, .mcp-settings #mcp-token, .mcp-settings pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.mcp-settings textarea { resize: vertical; overflow-wrap: anywhere; }
+.mcp-settings button { flex: none; display: inline-flex; justify-content: center; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--ui-border); border-radius: 6px; font: inherit; cursor: pointer; background: transparent; color: var(--ui-text); transition: background-color 120ms; }
+.mcp-settings button:hover { background: var(--ui-hover); }
+.mcp-settings button:disabled { cursor: default; opacity: .5; }
+.mcp-settings .mcp-primary { border-color: transparent; background: var(--ui-button); color: white; }
+.mcp-settings .mcp-primary:not(:disabled):hover { background: var(--ui-button-hover); }
+.mcp-settings :is(button, input, textarea, summary, pre):focus-visible { outline: 2px solid rgb(var(--drone-primary)); outline-offset: 2px; }
+.mcp-settings .mcp-token-footer { display: flex; align-items: flex-start; gap: 9px; margin-top: 6px; }
+.mcp-settings .mcp-token-footer p { font-size: 11px; }
+.mcp-settings .mcp-config { margin-top: 14px; }
+.mcp-settings summary { color: rgb(var(--drone-primary)); cursor: pointer; padding: 4px 0; }
+.mcp-settings .mcp-config p { margin: 6px 0 10px; font-size: 11px; }
+.mcp-settings .mcp-client-picker { display: flex; gap: 5px; margin-bottom: 7px; }
+.mcp-settings .mcp-client-picker button[aria-pressed='true'] { background: var(--ui-raised); border-color: rgb(var(--drone-primary)); }
+.mcp-settings .mcp-code { padding: 9px; border-radius: 6px; background: var(--ui-input); border: 1px solid var(--ui-border); }
+.mcp-settings pre { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; color: var(--ui-secondary); }
+.mcp-settings .mcp-connections { margin-top: 16px; }
+.mcp-settings ul { list-style: none; margin: 0; padding: 0; }
+.mcp-settings li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--ui-border); }
+.mcp-settings li > div { min-width: 0; }
+.mcp-settings li strong { display: block; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.mcp-settings li span { display: block; color: var(--ui-muted); font-size: 10px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.mcp-settings .mcp-revoke { color: #ce7777; border-color: transparent; }
+.mcp-settings .mcp-error { margin-top: 10px; color: #ce7777; }
+body.theme-light .mcp-settings :is(.mcp-revoke, .mcp-error) { color: #a13232; }
+.mcp-settings .mcp-notice { margin-top: 10px; padding: 9px; border: 1px solid var(--ui-border); border-radius: 6px; }
+.mcp-settings .mcp-progress { display: flex; gap: 7px; align-items: center; margin-top: 10px; }
+@media (max-width: 420px) { .mcp-settings .mcp-generate .mcp-copy-row { flex-direction: column; } .mcp-settings .mcp-generate button { align-self: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .mcp-settings button { transition: none; } }

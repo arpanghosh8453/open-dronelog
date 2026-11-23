@@ -963,5 +963,30 @@
     "exportReport": "Jelentés exportálása",
     "reportSaved": "Jelentés mentve.",
     "recordedEvents": "Rögzített események ({{count}})"
+  },
+  "mcp": {
+    "title": "Külső ügynökök",
+    "description": "Codex, Claude Code vagy más MCP-kliens csatlakoztatása ehhez a profilhoz: {{profile}}. A hozzáférés csak olvasási.",
+    "readOnly": "Csak olvasás",
+    "enable": "Helyi MCP-kiszolgáló engedélyezése",
+    "dockerDisabled": "A kiszolgáló beállításai letiltják. Az üzemeltetőnek be kell állítania az ODL_MCP_ENABLED=true értéket és ellenőriznie kell a végpontot.",
+    "localHelp": "Az ügynök csatlakozása közben az Open DroneLog maradjon futva, a profil pedig feloldva.",
+    "endpoint": "MCP-végpont",
+    "name": "Kapcsolat neve",
+    "namePlaceholder": "pl. Claude Code laptop",
+    "generate": "Token létrehozása",
+    "token": "Új hozzáférési token",
+    "oneTime": "Másolja le most a tokent. Csak egyszer jelenik meg, 90 nap után lejár, és kizárólag ehhez a profilhoz használható: {{profile}}.",
+    "copy": "Másolás",
+    "copied": "Másolva",
+    "configure": "Kliens beállítása",
+    "envHelp": "Állítsa az ügynök környezetében az ODL_MCP_TOKEN változót erre a tokenre, majd adja hozzá az alábbi beállítást.",
+    "connections": "Párosított ügynökök",
+    "noConnections": "Ehhez a profilhoz nincs párosított ügynök.",
+    "revoke": "Visszavonás",
+    "expires": "Lejár: {{date}}",
+    "loadFailed": "Az MCP-beállítások betöltése sikertelen. Nyissa meg újra a Beállításokat.",
+    "copyFailed": "A másolás sikertelen. Jelölje ki és másolja le kézzel a szöveget.",
+    "limitHelp": "Ehhez a profilhoz 10 aktív kapcsolat tartozik. Új token létrehozása előtt vonja vissza egy párosított ügynök hozzáférését."
   }
 }

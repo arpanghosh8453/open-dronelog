@@ -963,5 +963,30 @@
     "exportReport": "Export report",
     "reportSaved": "Report saved.",
     "recordedEvents": "Recorded events ({{count}})"
+  },
+  "mcp": {
+    "title": "External agents",
+    "description": "Connect Codex, Claude Code or another MCP client to {{profile}}. Access is read-only.",
+    "readOnly": "Read-only",
+    "enable": "Enable local MCP server",
+    "dockerDisabled": "Disabled by server configuration. The operator must enable ODL_MCP_ENABLED=true and check the endpoint settings.",
+    "localHelp": "Keep Open DroneLog running and this profile unlocked while your agent is connected.",
+    "endpoint": "MCP endpoint",
+    "name": "Connection name",
+    "namePlaceholder": "e.g. Claude Code laptop",
+    "generate": "Generate token",
+    "token": "New bearer token",
+    "oneTime": "Copy this token now. It is shown once, expires after 90 days and works only with {{profile}}.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "configure": "Client configuration",
+    "envHelp": "Set ODL_MCP_TOKEN in your agent’s environment to this token, then add the configuration below.",
+    "connections": "Paired agents",
+    "noConnections": "No agents paired with this profile.",
+    "revoke": "Revoke",
+    "expires": "Expires {{date}}",
+    "loadFailed": "Could not load MCP settings. Reopen Settings to retry.",
+    "copyFailed": "Could not copy. Select the text and copy it manually.",
+    "limitHelp": "This profile has 10 active connections. Revoke a paired agent before generating another token."
   }
 }

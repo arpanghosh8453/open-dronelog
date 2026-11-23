@@ -963,5 +963,30 @@
     "exportReport": "Raporu dışa aktar",
     "reportSaved": "Rapor kaydedildi.",
     "recordedEvents": "Kaydedilen olaylar ({{count}})"
+  },
+  "mcp": {
+    "title": "Harici ajanlar",
+    "description": "Codex, Claude Code veya başka bir MCP istemcisini {{profile}} profiline bağlayın. Erişim salt okunurdur.",
+    "readOnly": "Salt okunur",
+    "enable": "Yerel MCP sunucusunu etkinleştir",
+    "dockerDisabled": "Sunucu yapılandırması tarafından devre dışı bırakıldı. İşletmeci ODL_MCP_ENABLED=true ayarını etkinleştirmeli ve uç noktayı denetlemelidir.",
+    "localHelp": "Ajan bağlıyken Open DroneLog çalışır durumda ve bu profilin kilidi açık olmalıdır.",
+    "endpoint": "MCP uç noktası",
+    "name": "Bağlantı adı",
+    "namePlaceholder": "örn. Dizüstü Claude Code",
+    "generate": "Token oluştur",
+    "token": "Yeni Bearer token",
+    "oneTime": "Tokeni şimdi kopyalayın. Yalnızca bir kez gösterilir, 90 gün sonra sona erer ve yalnızca {{profile}} ile çalışır.",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "configure": "İstemci yapılandırması",
+    "envHelp": "Ajanın ortamındaki ODL_MCP_TOKEN değişkenini bu tokene ayarlayın ve aşağıdaki yapılandırmayı ekleyin.",
+    "connections": "Eşleştirilmiş ajanlar",
+    "noConnections": "Bu profille eşleştirilmiş ajan yok.",
+    "revoke": "İptal et",
+    "expires": "Bitiş: {{date}}",
+    "loadFailed": "MCP ayarları yüklenemedi. Ayarları yeniden açın.",
+    "copyFailed": "Kopyalanamadı. Metni seçip elle kopyalayın.",
+    "limitHelp": "Bu profilde 10 etkin bağlantı var. Yeni bir token oluşturmadan önce eşleştirilmiş bir ajanı iptal edin."
   }
 }

@@ -960,5 +960,30 @@
     "exportReport": "レポートをエクスポート",
     "reportSaved": "レポートを保存しました。",
     "recordedEvents": "記録されたイベント（{{count}}）"
+  },
+  "mcp": {
+    "title": "外部エージェント",
+    "description": "Codex、Claude Code、その他のMCPクライアントを {{profile}} に接続します。アクセスは読み取り専用です。",
+    "readOnly": "読み取り専用",
+    "enable": "ローカルMCPサーバーを有効化",
+    "dockerDisabled": "サーバー設定により無効です。管理者が ODL_MCP_ENABLED=true を設定し、接続先を確認してください。",
+    "localHelp": "エージェントの接続中はOpen DroneLogを起動し、このプロファイルのロックを解除しておいてください。",
+    "endpoint": "MCPエンドポイント",
+    "name": "接続名",
+    "namePlaceholder": "例：ノートPCのClaude Code",
+    "generate": "トークンを生成",
+    "token": "新しいBearerトークン",
+    "oneTime": "今すぐトークンをコピーしてください。表示は1回のみで、90日後に期限切れとなり、{{profile}} でのみ使用できます。",
+    "copy": "コピー",
+    "copied": "コピー済み",
+    "configure": "クライアント設定",
+    "envHelp": "エージェントの環境変数 ODL_MCP_TOKEN にこのトークンを設定し、以下の設定を追加してください。",
+    "connections": "ペアリング済みエージェント",
+    "noConnections": "このプロファイルにペアリングされたエージェントはありません。",
+    "revoke": "取り消す",
+    "expires": "有効期限：{{date}}",
+    "loadFailed": "MCP設定を読み込めませんでした。設定画面を開き直してください。",
+    "copyFailed": "コピーできませんでした。テキストを選択して手動でコピーしてください。",
+    "limitHelp": "このプロファイルには有効な接続が10件あります。別のトークンを生成するには、ペアリング済みエージェントを取り消してください。"
   }
 }

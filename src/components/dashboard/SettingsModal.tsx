@@ -14,6 +14,7 @@ import { getBlacklist, getSyncFolderPath, removeFromBlacklist } from './FlightIm
 import { SMART_TAG_TYPES, getEnabledSmartTagTypes, setEnabledSmartTagTypes, SmartTagTypeId } from '@/lib/api';
 import { FaComments, FaDiscord, FaGithub } from 'react-icons/fa';
 import { FiBookOpen, FiGlobe, FiMail } from 'react-icons/fi';
+import { McpSettings } from './McpSettings';
 import { useIsMobileRuntime } from '@/hooks/platform/useIsMobileRuntime';
 
 interface SettingsModalProps {
@@ -724,7 +725,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         {/* Content — two columns - scrollable area */}
         <div className="flex-1 p-4 overflow-y-auto min-h-0 settings-scroll">
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-0">
-            {/* Left Column: Preferences & API Key */}
+            {/* Left Column: Preferences, Profile & External Agents */}
             <div className="lg:w-1/2 space-y-4 lg:pr-5">
               {/* Units + Theme + Time Format — stack on mobile */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1336,8 +1337,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 )}
               </div>
 
+              {!isMobileRuntime && <McpSettings key={activeProfile} profile={activeProfile} />}
+            </div>
+
+            {/* Vertical Divider */}
+            <div className="hidden lg:block w-px bg-gray-700 shrink-0" />
+            {/* Horizontal Divider for mobile */}
+            <div className="lg:hidden h-px w-full bg-gray-700 shrink-0" />
+
+            {/* Right Column: DJI API Key, Support, Info & Data */}
+            <div className="lg:w-1/2 space-y-4 lg:pl-5">
               {/* API Key Section */}
-              <div className="pt-4 border-t border-gray-700">
+              <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {t('settings.djiApiKey')}
                 </label>
@@ -1437,17 +1448,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </p>
                 )}
               </div>
-            </div>
 
-            {/* Vertical Divider */}
-            <div className="hidden lg:block w-px bg-gray-700 shrink-0" />
-            {/* Horizontal Divider for mobile */}
-            <div className="lg:hidden h-px w-full bg-gray-700 shrink-0" />
-
-            {/* Right Column: Donation, Support, Info & Data */}
-            <div className="lg:w-1/2 space-y-4 lg:pl-5">
               {/* Donation Status */}
-              <div>
+              <div className="pt-4 border-t border-gray-700">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                   {t('settings.supporterBadge')}
                 </p>

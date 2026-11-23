@@ -5,6 +5,7 @@ mod investigation;
 pub mod pricing;
 pub mod provider;
 pub mod storage;
+pub mod tools;
 pub mod types;
 #[cfg(feature = "web")]
 pub mod web;
@@ -320,7 +321,7 @@ pub async fn run(
             let tools = if finishing {
                 vec![]
             } else {
-                analytics::definitions()
+                tools::definitions()
             };
             let mut round_system = if finishing {
                 format!("{system} Tool budget is now closed. Answer using the evidence already returned. Clearly state unresolved constraints or failed analysis; do not invent missing results or claim a complete answer without evidence.")
@@ -447,7 +448,7 @@ pub async fn run(
                             {
                                 Err("Corrected query dropped previously supplied filter conditions. Retain the original date, altitude, message and other comparisons while fixing syntax; do not broaden the search.".into())
                             } else {
-                                let mut result = analytics::execute(
+                                let mut result = tools::execute(
                                     ctx.db.clone(),
                                     &tool.name,
                                     args,

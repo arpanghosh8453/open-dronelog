@@ -199,6 +199,7 @@ function run() {
   const cargoToml = readText('src-tauri/Cargo.toml');
   const serverRs = readText('src-tauri/src/server.rs');
   const chatWebRs = readText('src-tauri/src/chat/web.rs');
+  const mcpHttpRs = readText('src-tauri/src/mcp/http.rs');
   const apiTs = readText('src/lib/api.ts');
   const databaseRs = readText('src-tauri/src/database.rs');
   const readme = readText('README.md');
@@ -212,7 +213,7 @@ function run() {
   const fingerprints = {
     packageJson: hashText(JSON.stringify(packageJson)),
     cargoToml: hashText(cargoToml),
-    serverRs: hashText(`${serverRs}\n${chatWebRs}`),
+    serverRs: hashText(`${serverRs}\n${chatWebRs}\n${mcpHttpRs}`),
     apiTs: hashText(apiTs),
     databaseRs: hashText(databaseRs),
     readmeEnvVars: hashText(JSON.stringify(readmeEnvVars)),
@@ -234,7 +235,7 @@ function run() {
     dependencies: parseCargoDependencies(cargoToml),
   };
 
-  const routes = [...parseRoutes(serverRs), ...parseRoutes(chatWebRs)];
+  const routes = [...parseRoutes(serverRs), ...parseRoutes(chatWebRs), ...parseRoutes(mcpHttpRs)];
   const apiRoutes = {
     sourceFingerprint: fingerprints.serverRs,
     sourceFile: 'src-tauri/src/server.rs',

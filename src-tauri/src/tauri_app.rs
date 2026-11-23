@@ -92,9 +92,21 @@ pub async fn chat_stream(
     result
 }
 
+#[tauri::command]
+pub async fn mcp_operation(
+    profile: String,
+    operation: String,
+    payload: serde_json::Value,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    chat_profile(&state, &profile)?;
+    state.mcp.operation(&profile, &operation, payload).await
+}
+
 /// Application state containing the database connection (swappable for profile switching)
 pub struct AppState {
     active_db: RwLock<Arc<Database>>,
+    mcp: Arc<crate::mcp::Server>,
     pub data_dir: PathBuf,
     /// When true, data commands are blocked until the user authenticates.
     locked: RwLock<bool>,
@@ -1875,12 +1887,34 @@ pub fn run() {
                 );
             }
 
+            let handle = app.handle().clone();
+            let mcp = crate::mcp::Server::new(
+                data_dir.clone(),
+                crate::mcp::Mode::Desktop,
+                false,
+                None,
+                Arc::new(move |profile| {
+                    let state = handle.state::<AppState>();
+                    chat_profile(&state, profile)
+                }),
+            );
+            let mcp_start = mcp.clone();
             app.manage(AppState {
+                mcp,
                 active_db: RwLock::new(Arc::new(db)),
                 data_dir,
                 locked: RwLock::new(start_locked),
             });
 
+            if crate::mcp::storage::inspect(&app.state::<AppState>().data_dir)
+                .is_ok_and(|settings| settings.desktop_enabled)
+            {
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = mcp_start.start_desktop(true).await {
+                        log::warn!("MCP listener not started: {error}");
+                    }
+                });
+            }
             if let Some(state) = app.try_state::<AppState>() {
                 crate::plugins::log_plugin_registration(&state.data_dir);
                 let allowed_extensions = crate::plugins::get_allowed_extensions(&state.data_dir);
@@ -1895,6 +1929,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             chat_operation,
+            mcp_operation,
             chat_stream,
             chat_cancel,
             import_log,

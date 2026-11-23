@@ -1,5 +1,5 @@
 {
-  "sourceFingerprint": "1ea3da78847d2137e7e1c04d3d2b010cfb89d907c03a58875ad3c27da6befb49",
+  "sourceFingerprint": "1b3e72030cb522cc4134f86fa035a844d8b075d3599046537b59ffd90b93fed0",
   "sourceFile": "src-tauri/src/database.rs",
   "tables": [
     {

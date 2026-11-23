@@ -954,5 +954,30 @@
     "exportReport": "Exportar relatório",
     "reportSaved": "Relatório salvo.",
     "recordedEvents": "Eventos registrados ({{count}})"
+  },
+  "mcp": {
+    "title": "Agentes externos",
+    "description": "Ligue o Codex, Claude Code ou outro cliente MCP a {{profile}}. O acesso é só de leitura.",
+    "readOnly": "Só leitura",
+    "enable": "Ativar servidor MCP local",
+    "dockerDisabled": "Desativado pela configuração do servidor. O operador deve definir ODL_MCP_ENABLED=true e verificar o endpoint.",
+    "localHelp": "Mantenha o Open DroneLog aberto e este perfil desbloqueado enquanto o agente estiver ligado.",
+    "endpoint": "Endpoint MCP",
+    "name": "Nome da ligação",
+    "namePlaceholder": "ex.: Claude Code portátil",
+    "generate": "Gerar token",
+    "token": "Novo token Bearer",
+    "oneTime": "Copie o token agora. É mostrado apenas uma vez, expira após 90 dias e funciona apenas com {{profile}}.",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "configure": "Configuração do cliente",
+    "envHelp": "Defina ODL_MCP_TOKEN no ambiente do agente com este token e adicione a configuração abaixo.",
+    "connections": "Agentes associados",
+    "noConnections": "Nenhum agente associado a este perfil.",
+    "revoke": "Revogar",
+    "expires": "Expira em {{date}}",
+    "loadFailed": "Não foi possível carregar as definições MCP. Reabra as Definições.",
+    "copyFailed": "Não foi possível copiar. Selecione o texto e copie manualmente.",
+    "limitHelp": "Este perfil tem 10 ligações ativas. Revogue um agente associado antes de gerar outro token."
   }
 }

@@ -960,5 +960,30 @@
     "exportReport": "Rapport exporteren",
     "reportSaved": "Rapport opgeslagen.",
     "recordedEvents": "Vastgelegde gebeurtenissen ({{count}})"
+  },
+  "mcp": {
+    "title": "Externe agents",
+    "description": "Verbind Codex, Claude Code of een andere MCP-client met {{profile}}. Toegang is alleen-lezen.",
+    "readOnly": "Alleen-lezen",
+    "enable": "Lokale MCP-server inschakelen",
+    "dockerDisabled": "Uitgeschakeld door de serverconfiguratie. De beheerder moet ODL_MCP_ENABLED=true instellen en het eindpunt controleren.",
+    "localHelp": "Houd Open DroneLog actief en dit profiel ontgrendeld zolang de agent verbonden is.",
+    "endpoint": "MCP-eindpunt",
+    "name": "Verbindingsnaam",
+    "namePlaceholder": "bijv. Claude Code laptop",
+    "generate": "Token genereren",
+    "token": "Nieuw Bearer-token",
+    "oneTime": "Kopieer dit token nu. Het wordt één keer getoond, verloopt na 90 dagen en werkt alleen met {{profile}}.",
+    "copy": "Kopiëren",
+    "copied": "Gekopieerd",
+    "configure": "Clientconfiguratie",
+    "envHelp": "Stel ODL_MCP_TOKEN in de omgeving van de agent in op dit token en voeg onderstaande configuratie toe.",
+    "connections": "Gekoppelde agents",
+    "noConnections": "Geen agents gekoppeld aan dit profiel.",
+    "revoke": "Intrekken",
+    "expires": "Verloopt op {{date}}",
+    "loadFailed": "MCP-instellingen laden mislukt. Open Instellingen opnieuw.",
+    "copyFailed": "Kopiëren mislukt. Selecteer de tekst en kopieer deze handmatig.",
+    "limitHelp": "Dit profiel heeft 10 actieve verbindingen. Trek een gekoppelde agent in voordat u een nieuw token genereert."
   }
 }

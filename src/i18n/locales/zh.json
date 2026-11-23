@@ -960,5 +960,30 @@
     "exportReport": "导出报告",
     "reportSaved": "报告已保存。",
     "recordedEvents": "已记录事件（{{count}}）"
+  },
+  "mcp": {
+    "title": "外部代理",
+    "description": "将 Codex、Claude Code 或其他 MCP 客户端连接到 {{profile}}。仅提供只读访问。",
+    "readOnly": "只读",
+    "enable": "启用本地 MCP 服务器",
+    "dockerDisabled": "已被服务器配置禁用。管理员须设置 ODL_MCP_ENABLED=true 并检查端点设置。",
+    "localHelp": "代理连接期间，请保持 Open DroneLog 运行，并保持此配置文件处于解锁状态。",
+    "endpoint": "MCP 端点",
+    "name": "连接名称",
+    "namePlaceholder": "例如：笔记本上的 Claude Code",
+    "generate": "生成令牌",
+    "token": "新的 Bearer 令牌",
+    "oneTime": "请立即复制此令牌。它只显示一次，90 天后过期，且仅适用于 {{profile}}。",
+    "copy": "复制",
+    "copied": "已复制",
+    "configure": "客户端配置",
+    "envHelp": "将代理环境中的 ODL_MCP_TOKEN 设置为此令牌，然后添加以下配置。",
+    "connections": "已配对的代理",
+    "noConnections": "尚无代理与此配置文件配对。",
+    "revoke": "撤销",
+    "expires": "到期时间：{{date}}",
+    "loadFailed": "无法加载 MCP 设置。请重新打开设置。",
+    "copyFailed": "无法复制。请选择文本并手动复制。",
+    "limitHelp": "此配置文件已有 10 个有效连接。请先撤销一个已配对的代理，再生成新的令牌。"
   }
 }

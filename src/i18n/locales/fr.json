@@ -961,5 +961,30 @@
     "exportReport": "Exporter le rapport",
     "reportSaved": "Rapport enregistré.",
     "recordedEvents": "Événements enregistrés ({{count}})"
+  },
+  "mcp": {
+    "title": "Agents externes",
+    "description": "Connectez Codex, Claude Code ou un autre client MCP à {{profile}}. Accès en lecture seule.",
+    "readOnly": "Lecture seule",
+    "enable": "Activer le serveur MCP local",
+    "dockerDisabled": "Désactivé par la configuration du serveur. L’opérateur doit définir ODL_MCP_ENABLED=true et vérifier le point d’accès.",
+    "localHelp": "Gardez Open DroneLog ouvert et ce profil déverrouillé pendant la connexion de l’agent.",
+    "endpoint": "Point d’accès MCP",
+    "name": "Nom de la connexion",
+    "namePlaceholder": "ex. Claude Code portable",
+    "generate": "Générer un jeton",
+    "token": "Nouveau jeton Bearer",
+    "oneTime": "Copiez ce jeton maintenant. Il ne sera affiché qu’une fois, expire après 90 jours et ne fonctionne qu’avec {{profile}}.",
+    "copy": "Copier",
+    "copied": "Copié",
+    "configure": "Configuration du client",
+    "envHelp": "Définissez ODL_MCP_TOKEN dans l’environnement de l’agent avec ce jeton, puis ajoutez la configuration ci-dessous.",
+    "connections": "Agents associés",
+    "noConnections": "Aucun agent associé à ce profil.",
+    "revoke": "Révoquer",
+    "expires": "Expire le {{date}}",
+    "loadFailed": "Impossible de charger les paramètres MCP. Rouvrez les paramètres.",
+    "copyFailed": "Copie impossible. Sélectionnez le texte et copiez-le manuellement.",
+    "limitHelp": "Ce profil a 10 connexions actives. Révoquez un agent associé avant de générer un autre jeton."
   }
 }

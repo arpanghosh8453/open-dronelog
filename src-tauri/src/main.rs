@@ -20,6 +20,7 @@ mod database;
 mod dronedeploy_parser;
 mod dronelogbook_parser;
 mod litchi_parser;
+mod mcp;
 mod models;
 mod parser;
 mod plugins;
