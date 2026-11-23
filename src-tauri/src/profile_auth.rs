@@ -93,7 +93,7 @@ pub fn set_password(
 
     let hashed = hash_password(new_password)?;
     map.insert(profile.to_string(), hashed);
-    save_auth(data_dir, &map)?;
+    crate::mcp::storage::change_authorization(data_dir, profile, || save_auth(data_dir, &map))?;
     log::info!("Password set for profile '{}'", profile);
     Ok(())
 }
@@ -108,7 +108,9 @@ pub fn remove_password(
     match map.get(profile) {
         Some(hash) if verify_password(current_password, hash) => {
             map.remove(profile);
-            save_auth(data_dir, &map)?;
+            crate::mcp::storage::change_authorization(data_dir, profile, || {
+                save_auth(data_dir, &map)
+            })?;
             log::info!("Password removed for profile '{}'", profile);
             Ok(())
         }

@@ -8,6 +8,96 @@ use axum::{
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[tokio::test]
+async fn retryable_busy_errors_are_reexecuted_after_import_finishes() {
+    let root = tempfile::tempdir().unwrap();
+    let db = Arc::new(Database::new(root.path().into(), "default").unwrap());
+    db.analytics_connection()
+        .unwrap()
+        .execute_batch("INSERT INTO flights(id,file_name,display_name) VALUES(1,'a','A')")
+        .unwrap();
+    let writer = Arc::new(Mutex::new(None));
+    let release = writer.clone();
+    let acquire = writer.clone();
+    let writer_db = db.clone();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = calls.clone();
+    let app = Router::new().route("/v1/chat/completions", post(move |Json(body): Json<Value>| {
+        let n = count.fetch_add(1, Ordering::SeqCst);
+        if n == 0 {
+            // The initial schema query has completed. Hold an import until the
+            // first tool query reports its bounded queue timeout.
+            *acquire.lock().unwrap() = Some(writer_db.workload.write());
+        }
+        if n == 1 {
+            let prior = body["messages"].as_array().unwrap().iter().rev().find(|m| m["role"] == "tool").unwrap()["content"].as_str().unwrap();
+            let error: Value = serde_json::from_str(prior).unwrap();
+            assert_eq!(error["error_code"], "analysis_busy");
+            assert_eq!(error["retryable"], true);
+            release.lock().unwrap().take();
+        }
+        if n == 2 {
+            let prior = body["messages"].as_array().unwrap().iter().rev().find(|m| m["role"] == "tool").unwrap()["content"].as_str().unwrap();
+            let evidence: Value = serde_json::from_str(prior).unwrap();
+            assert_eq!(evidence["rows"][0]["flights"], 1);
+            assert!(evidence.get("repeated_call").is_none());
+        }
+        async move {
+            let event = if n < 2 {
+                json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":format!("call_{n}"),"function":{"name":"query_flights","arguments":json!({"select":[{"field":"*","op":"count","alias":"flights"}]}).to_string()}}]},"finish_reason":"tool_calls"}]})
+            } else {
+                json!({"choices":[{"delta":{"content":"One flight."},"finish_reason":"stop"}]})
+            };
+            ([("content-type","text/event-stream")],format!("data: {event}\n\n")).into_response()
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    save_connection(
+        root.path(),
+        "default",
+        ConnectionSettings {
+            provider: "custom".into(),
+            base_url: format!("http://{address}/v1"),
+            api_format: "chat_completions".into(),
+            model: "synthetic-model".into(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let answer = run(
+        Context {
+            root: root.path().into(),
+            profile: "default".into(),
+            db,
+            authorize: Arc::new(|| Ok(())),
+        },
+        SendRequest {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            conversation_id: None,
+            message: "How many flights?".into(),
+            timezone: "UTC".into(),
+            unit_system: "metric".into(),
+        },
+        Arc::new(|_| {}),
+    )
+    .await;
+    server.abort();
+    assert!(answer.is_ok(), "{answer:?}");
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    let saved = storage::read::<Vault>(root.path(), "default").unwrap();
+    assert_eq!(
+        saved.conversations[0]
+            .messages
+            .last()
+            .unwrap()
+            .results
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn timeline_repair_preserves_window_and_rejects_truncated_fallback() {
     let calls = Arc::new(AtomicUsize::new(0));
     let count = calls.clone();

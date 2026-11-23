@@ -210,4 +210,25 @@ mod tests {
         assert!(!Arc::ptr_eq(&first, &workload(a.path(), "other")));
         assert!(!Arc::ptr_eq(&first, &workload(b.path(), "default")));
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn writer_waits_leave_async_runtime_free_to_release_analysis() {
+        let root = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::new(root.path().into(), "default").unwrap());
+        let scheduler = scheduler(1, 4);
+        let analysis = scheduler.acquire(db.workload.clone()).await.unwrap();
+        let writer_db = db.clone();
+        let writer = tokio::spawn(async move { writer_db.delete_all_flights_async().await });
+        // This timer and permit release must run even with a contending writer.
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while db.workload.state.lock().unwrap().waiting_writers == 0 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            drop(analysis);
+            writer.await.unwrap().unwrap();
+        })
+        .await
+        .unwrap();
+        assert!(scheduler.acquire(db.workload.clone()).await.is_ok());
+    }
 }

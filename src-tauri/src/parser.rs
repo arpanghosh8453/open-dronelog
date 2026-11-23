@@ -2368,8 +2368,8 @@ fn is_finite_f32(v: f32) -> bool {
 ///  5. Apply color from re-imported CSV exports
 ///  6. Insert app messages (tips and warnings) from DJI logs
 ///  7. Restore previously saved user customizations (display_name, notes, color, manual tags)
-pub fn run_post_import_steps(
-    db: &Database,
+pub async fn run_post_import_steps(
+    db: &std::sync::Arc<Database>,
     flight_id: i64,
     parse_result: &ParseResult,
     config: &serde_json::Value,
@@ -2436,7 +2436,11 @@ pub fn run_post_import_steps(
 
     // 6. Insert app messages (tips and warnings) from DJI logs
     if !parse_result.messages.is_empty() {
-        if let Err(e) = db.insert_flight_messages(flight_id, &parse_result.messages) {
+        let messages = parse_result.messages.clone();
+        if let Err(e) = db
+            .run_blocking(move |db| db.insert_flight_messages(flight_id, &messages))
+            .await
+        {
             log::warn!("Failed to insert messages for flight {}: {}", flight_id, e);
         }
     }

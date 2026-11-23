@@ -114,7 +114,7 @@ fn flights() -> String {
     "flights".into()
 }
 fn default_limit() -> usize {
-    100
+    500
 }
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ColumnMeta {
@@ -921,7 +921,7 @@ pub fn definitions() -> Vec<Value> {
                 "select":{"type":"array","items":{"type":"object","properties":{"field":{"type":"string"},"alias":{"type":"string"},"op":{"type":"string","enum":["value","count","count_distinct","sum","avg","min","max","median","stddev_pop","percentile"]},"bucket":{"type":"string","enum":["year","quarter","month","week","day","hour","day_of_week","hour_of_day","range"],"description":"Optional only for date or numeric binning. Omit for category fields; group_by uses selected aliases, not bucket."},"width":{"type":"number","exclusiveMinimum":0},"percentile":{"type":"number","minimum":0,"maximum":1}},"required":["field","alias"],"additionalProperties":false}},
                 "filter":{"$ref":"#/$defs/filter"},"having":{"$ref":"#/$defs/filter"},"group_by":{"type":"array","items":{"type":"string"}},
                 "order_by":{"type":"array","items":{"type":"object","properties":{"field":{"type":"string","description":"Selected alias; raw row queries may also sort by an approved source field"},"descending":{"type":"boolean"}},"required":["field"],"additionalProperties":false}},
-                "limit":{"type":"integer","minimum":1,"maximum":500,"description":"Maximum rows in the actual result table and chart. For a top-N ranking, set this to N; do not return a larger table and select N only in prose."},"offset":{"type":"integer","minimum":0,"maximum":100000},"title":{"type":"string"},
+                "limit":{"type":"integer","minimum":1,"maximum":500,"default":500,"description":"Maximum rows in the actual result table and chart. For a top-N ranking, set this to N; do not return a larger table and select N only in prose."},"offset":{"type":"integer","minimum":0,"maximum":100000},"title":{"type":"string"},
                 "chart":{"type":"object","properties":{"kind":{"type":"string","enum":["bar","line","donut","scatter","boxplot","heatmap","timeline","map"]},"x":{"type":"string"},"y":{"type":"array","items":{"type":"string"}},"series":{"type":"string","description":"Optional selected category alias used to split rows into series. Omit for grouped bars/lines using multiple numeric y columns. Never invent a series name or legend label."},"annotations":{"type":"array","maxItems":50,"items":{"type":"object","properties":{"x":{"type":"number"},"label":{"type":"string","maxLength":300}},"required":["x","label"],"additionalProperties":false}},"band":{"type":"object","properties":{"lower":{"type":"string"},"upper":{"type":"string"}},"required":["lower","upper"],"additionalProperties":false}},"required":["kind","x","y"],"additionalProperties":false}
             },"required":["select"],"additionalProperties":false,
             "$defs":{"filter":{"type":"object","properties":{"kind":{"type":"string","enum":["all","any","not","compare","tag","telemetry","message"]},"filters":{"type":"array","items":{"$ref":"#/$defs/filter"}},"filter":{"$ref":"#/$defs/filter"},"field":{"type":"string"},"op":{"type":"string"},"value":{},"tag":{"type":"string"}},"required":["kind"],"additionalProperties":false}}
@@ -938,7 +938,7 @@ pub fn definitions() -> Vec<Value> {
     ]});
     let query_schema = definitions[1]["parameters"].clone();
     definitions.extend(super::investigation::definitions(&query_schema));
-    definitions.push(json!({"name":"search_flight_messages","description":"Find distinct flight logs with matching warning/log messages, with exact total and actual matched message evidence. Use FIRST for message searches. Use category=low_battery for low-battery or low-voltage warnings (includes imported Voltage Warning transitions); use text for a case-insensitive literal phrase instead. Each flight appears once. Severity labels vary (warn, caution, tip); no implicit severity restriction. Flight dates use local timezone, inclusive start_date and exclusive end_date. Optional minimum altitude/duration constraints are strictly greater-than. Successful zero matches is a valid complete answer; do not retry with broader phrases.","parameters":{"type":"object","properties":{"text":{"type":"string","description":"Literal case-insensitive phrase; provide either text or category"},"category":{"type":"string","enum":["low_battery"]},"start_date":{"type":"string","description":"Inclusive local date YYYY-MM-DD"},"end_date":{"type":"string","description":"Exclusive local date YYYY-MM-DD"},"min_altitude_m":{"type":"number","minimum":0},"min_duration_minutes":{"type":"number","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":500}},"additionalProperties":false}}));
+    definitions.push(json!({"name":"search_flight_messages","description":"Find distinct flight logs with matching warning/log messages, with exact total and actual matched message evidence. Use FIRST for message searches. Use category=low_battery for low-battery or low-voltage warnings (includes imported Voltage Warning transitions); use text for a case-insensitive literal phrase instead. Each flight appears once. Severity labels vary (warn, caution, tip); no implicit severity restriction. Flight dates use local timezone, inclusive start_date and exclusive end_date. Optional minimum altitude/duration constraints are strictly greater-than. Successful zero matches is a valid complete answer; do not retry with broader phrases.","parameters":{"type":"object","properties":{"text":{"type":"string","description":"Literal case-insensitive phrase; provide either text or category"},"category":{"type":"string","enum":["low_battery"]},"start_date":{"type":"string","description":"Inclusive local date YYYY-MM-DD"},"end_date":{"type":"string","description":"Exclusive local date YYYY-MM-DD"},"min_altitude_m":{"type":"number","minimum":0},"min_duration_minutes":{"type":"number","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":500,"default":500}},"additionalProperties":false}}));
     let search_schema = &mut definitions.last_mut().unwrap()["parameters"];
     search_schema["oneOf"] = json!([{"required":["text"]},{"required":["category"]}]);
     search_schema["properties"]["text"]["minLength"] = json!(1);
@@ -948,13 +948,23 @@ pub fn definitions() -> Vec<Value> {
 /// Retain valid comparison atoms when a model repairs a failed structured query.
 /// Unknown fields/operators remain repairable rather than becoming permanent constraints.
 pub(super) fn filter_constraints(args: &Value) -> std::collections::BTreeSet<String> {
-    fn collect(value: &Value, out: &mut std::collections::BTreeSet<String>) {
+    filter_constraints_with_aliases(args, None)
+}
+pub(super) fn filter_constraints_with_aliases(
+    args: &Value,
+    aliases: Option<&HashSet<String>>,
+) -> std::collections::BTreeSet<String> {
+    fn collect(
+        value: &Value,
+        out: &mut std::collections::BTreeSet<String>,
+        aliases: Option<&HashSet<String>>,
+    ) {
         if let Some(children) = value.as_array() {
             for child in children {
-                collect(child, out);
+                collect(child, out, aliases);
             }
         }
-        if value["kind"] == "tag" {
+        if value["kind"] == "tag" && aliases.is_none() {
             let canonical = json!({"kind":"tag","tag":value["tag"]});
             if let Ok(filter) = serde_json::from_value::<Filter>(canonical.clone()) {
                 if filter_sql(&filter, "flights", "UTC", None, &mut vec![], 0, &mut 0).is_ok() {
@@ -964,7 +974,7 @@ pub(super) fn filter_constraints(args: &Value) -> std::collections::BTreeSet<Str
         }
         if value["kind"] == "compare" {
             let mut canonical = json!({"kind":"compare","field":value["field"],"op":value["op"],"value":value.get("value").unwrap_or(&Value::Null)});
-            if canonical["field"] == "flight_id" {
+            if aliases.is_none() && canonical["field"] == "flight_id" {
                 canonical["field"] = json!("id");
             }
             if let Some(number) = canonical["value"]
@@ -975,27 +985,27 @@ pub(super) fn filter_constraints(args: &Value) -> std::collections::BTreeSet<Str
             }
             if let Ok(filter) = serde_json::from_value::<Filter>(canonical.clone()) {
                 if ["flights", "messages", "telemetry"].iter().any(|source| {
-                    filter_sql(&filter, source, "UTC", None, &mut vec![], 0, &mut 0).is_ok()
+                    filter_sql(&filter, source, "UTC", aliases, &mut vec![], 0, &mut 0).is_ok()
                 }) {
                     out.insert(canonical.to_string());
                 }
             }
         }
         if let Some(child) = value.get("filter") {
-            collect(child, out);
+            collect(child, out, aliases);
         }
         if let Some(children) = value.get("filters").and_then(Value::as_array) {
             for child in children {
-                collect(child, out);
+                collect(child, out, aliases);
             }
         }
     }
     let mut out = std::collections::BTreeSet::new();
     if let Some(filter) = args.get("filter") {
-        collect(filter, &mut out);
+        collect(filter, &mut out, aliases);
     }
     if let Some(filters) = args.get("filters") {
-        collect(filters, &mut out);
+        collect(filters, &mut out, aliases);
     }
     out
 }
@@ -1282,7 +1292,7 @@ pub async fn execute(
                 percentile: None,
             });
             evidence_query.title = "Matched warning messages".into();
-            evidence_query.limit = 100;
+            evidence_query.limit = 500;
             let evidence = query(db.clone(), evidence_query, zone.to_string()).await?;
             let mut result = query(db, q, zone.to_string()).await?;
             result.note.push_str(&format!(" Exact matching flight count: {}. Message matching identifies recorded text, not a battery-health diagnosis.",count.rows[0]["matching_flights"]));

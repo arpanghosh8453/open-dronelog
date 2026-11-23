@@ -384,7 +384,7 @@ async fn import_log(
 
     let parser = LogParser::new(&pdb.db);
 
-    let parse_result = match parser.parse_log(&temp_path).await {
+    let mut parse_result = match parser.parse_log(&temp_path).await {
         Ok(result) => result,
         Err(crate::parser::ParserError::AlreadyImported(matching_flight)) => {
             // Compute file hash so copy_uploaded_file_web can properly deduplicate
@@ -451,17 +451,22 @@ async fn import_log(
     }
 
     // Insert flight metadata
-    let flight_id = pdb.db.insert_flight(&parse_result.metadata).map_err(|e| {
-        err_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to insert flight: {}", e),
-        )
-    })?;
+    let flight_id = pdb
+        .db
+        .insert_flight_async(parse_result.metadata.clone())
+        .await
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to insert flight: {}", e),
+            )
+        })?;
 
     // Bulk insert telemetry data
     let point_count = match pdb
         .db
-        .bulk_insert_telemetry(flight_id, &parse_result.points)
+        .bulk_insert_telemetry_async(flight_id, std::mem::take(&mut parse_result.points))
+        .await
     {
         Ok(count) => count,
         Err(e) => {
@@ -470,7 +475,7 @@ async fn import_log(
                 flight_id,
                 e
             );
-            if let Err(cleanup_err) = pdb.db.delete_flight(flight_id) {
+            if let Err(cleanup_err) = pdb.db.delete_flight_async(flight_id).await {
                 log::error!("Failed to clean up flight {}: {}", flight_id, cleanup_err);
             }
             return Ok(Json(ImportResult {
@@ -486,7 +491,8 @@ async fn import_log(
     // Run all post-import steps (smart tags, manual tags, profile tags,
     // notes, color, messages, and customization restore)
     let config = crate::models::load_profile_config(&pdb.config_path());
-    crate::parser::run_post_import_steps(&pdb.db, flight_id, &parse_result, &config, &pdb.profile);
+    crate::parser::run_post_import_steps(&pdb.db, flight_id, &parse_result, &config, &pdb.profile)
+        .await;
 
     log::info!(
         "Successfully imported flight {} with {} points in {:.1}s",
@@ -600,12 +606,15 @@ async fn create_manual_flight(
         rc_serial: None,
         battery_life: None,
     };
-    pdb.db.insert_flight(&metadata).map_err(|e| {
-        err_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to insert flight: {}", e),
-        )
-    })?;
+    pdb.db
+        .insert_flight_async(metadata.clone())
+        .await
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to insert flight: {}", e),
+            )
+        })?;
 
     // Update notes if provided
     if let Some(notes_text) = &payload.notes {
@@ -775,7 +784,8 @@ async fn delete_flight(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     log::info!("Deleting flight: {}", params.flight_id);
     pdb.db
-        .delete_flight(params.flight_id)
+        .delete_flight_async(params.flight_id)
+        .await
         .map(|_| Json(true))
         .map_err(|e| {
             err_response(
@@ -791,7 +801,8 @@ async fn delete_all_flights(
 ) -> Result<Json<bool>, (StatusCode, Json<ErrorResponse>)> {
     log::warn!("Deleting ALL flights and telemetry");
     pdb.db
-        .delete_all_flights()
+        .delete_all_flights_async()
+        .await
         .map(|_| Json(true))
         .map_err(|e| {
             err_response(
@@ -1084,12 +1095,17 @@ async fn import_backup(
         )
     })?;
 
-    let msg = pdb.db.import_backup(&temp_path).map_err(|e| {
-        err_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Restore failed: {}", e),
-        )
-    })?;
+    let restore_path = temp_path.clone();
+    let msg = pdb
+        .db
+        .run_blocking(move |db| db.import_backup(&restore_path))
+        .await
+        .map_err(|e| {
+            err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Restore failed: {}", e),
+            )
+        })?;
 
     let _ = std::fs::remove_file(&temp_path);
 
@@ -1900,7 +1916,7 @@ async fn sync_single_file(
 
     let parser = LogParser::new(&pdb.db);
 
-    let parse_result = match parser.parse_log(&file_path).await {
+    let mut parse_result = match parser.parse_log(&file_path).await {
         Ok(result) => result,
         Err(crate::parser::ParserError::AlreadyImported(matching_flight)) => {
             return Ok(Json(SyncFileResponse {
@@ -1936,7 +1952,11 @@ async fn sync_single_file(
     }
 
     // Insert flight
-    let flight_id = match pdb.db.insert_flight(&parse_result.metadata) {
+    let flight_id = match pdb
+        .db
+        .insert_flight_async(parse_result.metadata.clone())
+        .await
+    {
         Ok(id) => id,
         Err(e) => {
             return Ok(Json(SyncFileResponse {
@@ -1950,9 +1970,10 @@ async fn sync_single_file(
     // Insert telemetry
     if let Err(e) = pdb
         .db
-        .bulk_insert_telemetry(flight_id, &parse_result.points)
+        .bulk_insert_telemetry_async(flight_id, std::mem::take(&mut parse_result.points))
+        .await
     {
-        let _ = pdb.db.delete_flight(flight_id);
+        let _ = pdb.db.delete_flight_async(flight_id).await;
         return Ok(Json(SyncFileResponse {
             success: false,
             message: format!("Failed to insert telemetry: {}", e),
@@ -1963,7 +1984,8 @@ async fn sync_single_file(
     // Run all post-import steps (smart tags, manual tags, profile tags,
     // notes, color, messages, and customization restore)
     let config = crate::models::load_profile_config(&pdb.config_path());
-    crate::parser::run_post_import_steps(&pdb.db, flight_id, &parse_result, &config, &pdb.profile);
+    crate::parser::run_post_import_steps(&pdb.db, flight_id, &parse_result, &config, &pdb.profile)
+        .await;
 
     Ok(Json(SyncFileResponse {
         success: true,
@@ -2078,7 +2100,7 @@ async fn sync_from_folder(
             }
         }
 
-        let parse_result = match parser.parse_log(&file_path).await {
+        let mut parse_result = match parser.parse_log(&file_path).await {
             Ok(result) => result,
             Err(crate::parser::ParserError::AlreadyImported(matching_flight)) => {
                 log::debug!(
@@ -2116,7 +2138,11 @@ async fn sync_from_folder(
         }
 
         // Insert flight
-        let flight_id = match pdb.db.insert_flight(&parse_result.metadata) {
+        let flight_id = match pdb
+            .db
+            .insert_flight_async(parse_result.metadata.clone())
+            .await
+        {
             Ok(id) => id,
             Err(e) => {
                 log::warn!("Failed to insert flight from {}: {}", file_name, e);
@@ -2128,10 +2154,11 @@ async fn sync_from_folder(
         // Insert telemetry
         if let Err(e) = pdb
             .db
-            .bulk_insert_telemetry(flight_id, &parse_result.points)
+            .bulk_insert_telemetry_async(flight_id, std::mem::take(&mut parse_result.points))
+            .await
         {
             log::warn!("Failed to insert telemetry for {}: {}", file_name, e);
-            let _ = pdb.db.delete_flight(flight_id);
+            let _ = pdb.db.delete_flight_async(flight_id).await;
             errors += 1;
             continue;
         }
@@ -2144,7 +2171,8 @@ async fn sync_from_folder(
             &parse_result,
             &config,
             &pdb.profile,
-        );
+        )
+        .await;
 
         processed += 1;
         log::debug!("Synced: {}", file_name);
@@ -3314,7 +3342,7 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            let parse_result = match parser.parse_log(file_path).await {
+            let mut parse_result = match parser.parse_log(file_path).await {
                 Ok(result) => result,
                 Err(crate::parser::ParserError::AlreadyImported(_)) => {
                     total_skipped += 1;
@@ -3347,7 +3375,7 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
             }
 
             // Insert flight
-            let flight_id = match db.insert_flight(&parse_result.metadata) {
+            let flight_id = match db.insert_flight_async(parse_result.metadata.clone()).await {
                 Ok(id) => id,
                 Err(e) => {
                     log::warn!(
@@ -3362,21 +3390,25 @@ async fn run_scheduled_sync(state: &WebAppState) -> Result<(usize, usize, usize)
             };
 
             // Insert telemetry
-            if let Err(e) = db.bulk_insert_telemetry(flight_id, &parse_result.points) {
+            if let Err(e) = db
+                .bulk_insert_telemetry_async(flight_id, std::mem::take(&mut parse_result.points))
+                .await
+            {
                 log::warn!(
                     "[SYNC][SCHEDULED][{}] Failed to insert telemetry for {}: {}",
                     profile,
                     file_name,
                     e
                 );
-                let _ = db.delete_flight(flight_id);
+                let _ = db.delete_flight_async(flight_id).await;
                 total_errors += 1;
                 continue;
             }
 
             // Run all post-import steps (smart tags, manual tags, profile tags,
             // notes, color, messages, and customization restore)
-            crate::parser::run_post_import_steps(&db, flight_id, &parse_result, &config, profile);
+            crate::parser::run_post_import_steps(&db, flight_id, &parse_result, &config, profile)
+                .await;
 
             total_processed += 1;
             log::debug!("[SYNC][SCHEDULED][{}] Imported {}", profile, file_name);

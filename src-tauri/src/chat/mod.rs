@@ -454,9 +454,13 @@ pub async fn run(
                         error.output()
                     }
                 };
-                seen_tools
-                    .entry(cache_key)
-                    .or_insert_with(|| output.clone());
+                // Busy/rate-limit failures can recover without changing arguments.
+                // They must reach the executor again rather than the duplicate cache.
+                if output["retryable"] != true {
+                    seen_tools
+                        .entry(cache_key)
+                        .or_insert_with(|| output.clone());
+                }
                 let serialized =
                     serde_json::to_string(&output).map_err(|_| "Cannot encode tool result")?;
                 // UI retains the full result; provider context is bounded explicitly.

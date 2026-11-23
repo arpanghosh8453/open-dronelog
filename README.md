@@ -498,6 +498,8 @@ The **Chat** tab provides read-only analysis of the current profile using your o
 
 See the [flight chat guide](docs/chat.md) for setup, privacy, encryption-key persistence, local providers, query semantics and limits.
 
+To test functionality, use an [OpenRouter API key](https://openrouter.ai/settings/keys) with the `openrouter/free` model. Free models have usage limits and variable availability. For regular use and complex analysis, we recommend a funded API key with a paid model for more reliable access and stronger reasoning. The [OpenRouter setup instructions](docs/chat.md#try-it-with-openrouter) show the required connection settings.
+
 ## External agents with MCP
 
 Open **Settings → External agents** to connect Codex, Claude Code or another MCP client to the selected profile. On desktop, enable the local MCP server and keep the application running with that profile unlocked. Docker operators must first set `ODL_MCP_ENABLED=true` and recreate the container. The HTTP endpoint is `/mcp` on the existing application server; desktop binds only to `127.0.0.1` on port 48765 by default.

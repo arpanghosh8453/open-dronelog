@@ -23,6 +23,8 @@ use crate::models::{
 
 #[derive(Error, Debug)]
 pub enum DatabaseError {
+    #[error("Database worker failed: {0}")]
+    Worker(String),
     #[error("DuckDB error: {0}")]
     DuckDb(#[from] duckdb::Error),
 
@@ -55,6 +57,42 @@ impl Drop for Database {
 }
 
 impl Database {
+    /// Run synchronous database work, including scheduler waits, off async workers.
+    pub async fn run_blocking<T: Send + 'static>(
+        self: &std::sync::Arc<Self>,
+        work: impl FnOnce(&Self) -> Result<T, DatabaseError> + Send + 'static,
+    ) -> Result<T, DatabaseError> {
+        let db = self.clone();
+        tokio::task::spawn_blocking(move || work(&db))
+            .await
+            .map_err(|error| DatabaseError::Worker(error.to_string()))?
+    }
+
+    pub async fn insert_flight_async(
+        self: &std::sync::Arc<Self>,
+        flight: FlightMetadata,
+    ) -> Result<i64, DatabaseError> {
+        self.run_blocking(move |db| db.insert_flight(&flight)).await
+    }
+    pub async fn bulk_insert_telemetry_async(
+        self: &std::sync::Arc<Self>,
+        id: i64,
+        points: Vec<TelemetryPoint>,
+    ) -> Result<usize, DatabaseError> {
+        self.run_blocking(move |db| db.bulk_insert_telemetry(id, &points))
+            .await
+    }
+    pub async fn delete_flight_async(
+        self: &std::sync::Arc<Self>,
+        id: i64,
+    ) -> Result<(), DatabaseError> {
+        self.run_blocking(move |db| db.delete_flight(id)).await
+    }
+    pub async fn delete_all_flights_async(
+        self: &std::sync::Arc<Self>,
+    ) -> Result<(), DatabaseError> {
+        self.run_blocking(|db| db.delete_all_flights()).await
+    }
     /// A connection to the same in-process database for bounded assistant reads.
     /// Callers compile queries from an allowlist; this is never a raw SQL API.
     pub(crate) fn analytics_connection(&self) -> Result<Connection, String> {

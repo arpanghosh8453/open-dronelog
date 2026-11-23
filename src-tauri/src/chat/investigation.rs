@@ -59,9 +59,9 @@ pub fn definitions(query: &Value) -> Vec<Value> {
     let mut tools = vec![
         ("compare_cohorts", "Compare 2–6 explicitly named flight cohorts. Compute totals/statistics and changes from the first cohort, optionally per flight hour or km. Ratios use sums over all matching flights, never average-of-ratios. Overlapping cohorts are allowed and disclosed.", object(json!({"cohorts":{"type":"array","minItems":2,"maxItems":6,"items":object(json!({"name":{"type":"string","maxLength":80},"filter":filter}), &["name","filter"])},"metrics":{"type":"array","minItems":1,"maxItems":4,"items":object(json!({"field":{"type":"string"},"op":{"type":"string","enum":["sum","avg","median","min","max","count","count_distinct","percentile"]},"percentile":{"type":"number"},"normalize":{"type":"string","enum":["none","flight_hour","km"]}}), &["field","op"])}}), &["cohorts","metrics"])),
         ("analyze_flight_timeline", "Analyze one flight using elapsed milliseconds, bounded time bins and raw-warning annotations. Includes mean/min/max envelopes; use a narrow start/end range for closer inspection. Optional map shows the bounded recorded route, not location analysis.", object(json!({"flight_id":{"type":"integer","minimum":1},"metrics":{"type":"array","minItems":1,"maxItems":3,"items":{"type":"string","enum":NUMERIC_TELEMETRY}},"start_ms":{"type":"number","minimum":0},"end_ms":{"type":"number","minimum":0},"bucket_ms":{"type":"number","minimum":1},"include_map":{"type":"boolean"}}), &["flight_id","metrics"])),
-        ("detect_anomalies", "Find deviations using population mean/stddev of flight-level metrics and a declared baseline. With flight_id, defaults to other earlier flights of the same aircraft (model fallback), excludes target and plots one telemetry metric against historical 5–95% bands at normalized flight progress. At least 3 non-null baseline flights are required. Not a causal or safety diagnosis. Candidate list is bounded; baseline aggregates cover all matches.", object(json!({"flight_id":{"type":"integer","minimum":1},"filter":filter,"baseline_filter":filter,"metrics":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string"}},"telemetry_metric":{"type":"string","enum":NUMERIC_TELEMETRY,"description":"Raw telemetry field for the baseline plot, e.g. telemetry_altitude. Flight summary metrics such as max_altitude are not raw telemetry fields."},"threshold":{"type":"number","minimum":1,"maximum":10},"limit":{"type":"integer","minimum":1,"maximum":100}}), &[])),
-        ("analyze_battery_health", "Use FIRST for battery comparisons with discharge distributions and cycle-count scatter plots. Returns exact per-serial total flights, known-cycle and discharge-available counts plus charts. battery_limit selects the most-used N serials by all matching flights; limit bounds the recent-flight scatter table only. Compares recorded discharge, voltage range, temperature and cell imbalance. These are operating-condition-dependent indicators, not a remaining-life estimate or load-corrected voltage sag.", object(json!({"filter":filter,"battery_serial":{"type":"string","maxLength":200},"battery_limit":{"type":"integer","minimum":1,"maximum":100},"limit":{"type":"integer","minimum":1,"maximum":500}}), &[])),
-        ("assess_data_quality", "Assess flight/telemetry completeness, timestamp gaps and duplicates, position/battery coverage, duration/span mismatch and exact counts of stored battery percentages outside 0–100, nonpositive voltage, and temperatures outside a broad -40 to 100 Celsius sanity band. Flags suggest investigation of decoding/units; they are not operating limits or physical battery-health diagnoses. Exact summary over all matches plus bounded per-flight evidence. Manual flights legitimately have no telemetry. Does not alter data.", object(json!({"filter":filter,"gap_ms":{"type":"number","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":500}}), &[])),
+        ("detect_anomalies", "Find deviations using population mean/stddev of flight-level metrics and a declared baseline. With flight_id, defaults to other earlier flights of the same aircraft (model fallback), excludes target and plots one telemetry metric against historical 5–95% bands at normalized flight progress. At least 3 non-null baseline flights are required. Not a causal or safety diagnosis. Candidate list is bounded; baseline aggregates cover all matches.", object(json!({"flight_id":{"type":"integer","minimum":1},"filter":filter,"baseline_filter":filter,"metrics":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string"}},"telemetry_metric":{"type":"string","enum":NUMERIC_TELEMETRY,"description":"Raw telemetry field for the baseline plot, e.g. telemetry_altitude. Flight summary metrics such as max_altitude are not raw telemetry fields."},"threshold":{"type":"number","minimum":1,"maximum":10},"limit":{"type":"integer","minimum":1,"maximum":500,"default":500}}), &[])),
+        ("analyze_battery_health", "Use FIRST for battery comparisons with discharge distributions and cycle-count scatter plots. Returns exact per-serial total flights, known-cycle and discharge-available counts plus charts. battery_limit selects the most-used N serials by all matching flights; limit bounds the recent-flight scatter table only. Compares recorded discharge, voltage range, temperature and cell imbalance. These are operating-condition-dependent indicators, not a remaining-life estimate or load-corrected voltage sag.", object(json!({"filter":filter,"battery_serial":{"type":"string","maxLength":200},"battery_limit":{"type":"integer","minimum":1,"maximum":100},"limit":{"type":"integer","minimum":1,"maximum":500,"default":500}}), &[])),
+        ("assess_data_quality", "Assess flight/telemetry completeness, timestamp gaps and duplicates, position/battery coverage, duration/span mismatch and exact counts of stored battery percentages outside 0–100, nonpositive voltage, and temperatures outside a broad -40 to 100 Celsius sanity band. Flags suggest investigation of decoding/units; they are not operating limits or physical battery-health diagnoses. Exact summary over all matches plus bounded per-flight evidence. Manual flights legitimately have no telemetry. Does not alter data.", object(json!({"filter":filter,"gap_ms":{"type":"number","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":500,"default":500}}), &[])),
         ("explain_metric", "Explain field units, calculation, weighting and limitations. Use describe_data for supported identifiers.", object(json!({"metric":{"type":"string","maxLength":100}}), &["metric"])),
         ("build_investigation_report", "Build an exportable report by executing 1–6 validated evidence queries. Each section retains filters, units, provenance, charts and flight links. Interpretations are explicitly labeled as model commentary, not verified calculations. Does not save a reusable analysis.", object(json!({"title":{"type":"string","maxLength":160},"sections":{"type":"array","minItems":1,"maxItems":6,"items":object(json!({"query":query,"interpretation":{"type":"string","maxLength":2000}}), &["query"])}}), &["title","sections"])),
     ];
@@ -147,7 +147,7 @@ fn limit(n: usize, max: usize) -> Result<(), String> {
     }
 }
 fn default_limit() -> usize {
-    100
+    500
 }
 fn default_threshold() -> f64 {
     2.5
@@ -355,7 +355,7 @@ async fn timeline(
         cmp("telemetry_timestamp_ms", "lte", json!(end)),
     ]);
     let mut sections = vec![];
-    let messages=run(db.clone(),json!({"source":"messages","select":[selection("message_timestamp_ms","value","elapsed_ms"),selection("message_type","value","type"),selection("message_text","value","message")],"filter":all(vec![cmp("id","eq",json!(a.flight_id)),cmp("message_timestamp_ms","gte",json!(start)),cmp("message_timestamp_ms","lte",json!(end))]),"order_by":[{"field":"elapsed_ms"}],"limit":100,"title":"Recorded events"}),zone).await?;
+    let messages=run(db.clone(),json!({"source":"messages","select":[selection("message_timestamp_ms","value","elapsed_ms"),selection("message_type","value","type"),selection("message_text","value","message")],"filter":all(vec![cmp("id","eq",json!(a.flight_id)),cmp("message_timestamp_ms","gte",json!(start)),cmp("message_timestamp_ms","lte",json!(end))]),"order_by":[{"field":"elapsed_ms"}],"limit":500,"title":"Recorded events"}),zone).await?;
     for metric in &a.metrics {
         let mut r=run(db.clone(),json!({"source":"telemetry","select":[{"field":"telemetry_timestamp_ms","alias":"elapsed_ms","bucket":"range","width":width},selection(metric,"avg","mean"),selection(metric,"min","minimum"),selection(metric,"max","maximum"),selection(metric,"count","samples")],"filter":filter,"group_by":["elapsed_ms"],"order_by":[{"field":"elapsed_ms"}],"limit":500,"title":metric}),zone).await?;
         let mut spec = chart(
@@ -388,7 +388,7 @@ async fn timeline(
             .collect();
         r.chart = Some(spec);
         r.row_flight_ids = vec![Some(a.flight_id); r.rows.len()];
-        r.note=format!("Elapsed milliseconds from flight start; bins are {width} ms. Mean is sample-weighted; shaded envelope retains raw sample min/max per bin. Missing samples are not interpolated. First 50 events annotated; event table holds up to 100. Metric: {metric}. {}",r.note);
+        r.note=format!("Elapsed milliseconds from flight start; bins are {width} ms. Mean is sample-weighted; shaded envelope retains raw sample min/max per bin. Missing samples are not interpolated. First 50 events annotated; event table holds up to 500. Metric: {metric}. {}",r.note);
         sections.push(r);
     }
     if a.include_map {
@@ -464,7 +464,7 @@ async fn anomalies(
     request: Value,
     zone: &str,
 ) -> Result<QueryResult, String> {
-    limit(a.limit, 100)?;
+    limit(a.limit, 500)?;
     if a.flight_id.is_some() {
         numeric_telemetry(
             a.telemetry_metric
@@ -660,12 +660,12 @@ async fn anomalies(
             cmp("telemetry_progress_pct", "lte", json!(100)),
         ]);
         let phase = json!({"field":"telemetry_progress_pct","alias":"progress_pct","bucket":"range","width":2});
-        let target=run(db.clone(),json!({"source":"telemetry","select":[phase,selection(metric,"avg","observed")],"filter":all(vec![phase_filter.clone(),cmp("id","eq",json!(id))]),"group_by":["progress_pct"],"order_by":[{"field":"progress_pct"}],"limit":100}),zone).await?;
+        let target=run(db.clone(),json!({"source":"telemetry","select":[phase,selection(metric,"avg","observed")],"filter":all(vec![phase_filter.clone(),cmp("id","eq",json!(id))]),"group_by":["progress_pct"],"order_by":[{"field":"progress_pct"}],"limit":500}),zone).await?;
         let mut low = selection(metric, "percentile", "baseline_low");
         low["percentile"] = json!(0.05);
         let mut high = selection(metric, "percentile", "baseline_high");
         high["percentile"] = json!(0.95);
-        let base=run(db.clone(),json!({"source":"telemetry","select":[phase,selection(metric,"avg","baseline_mean"),low,high,selection("id","count_distinct","baseline_flights")],"filter":all(vec![phase_filter,baseline,cmp(metric,"not_null",Value::Null)]),"group_by":["progress_pct"],"order_by":[{"field":"progress_pct"}],"limit":100}),zone).await?;
+        let base=run(db.clone(),json!({"source":"telemetry","select":[phase,selection(metric,"avg","baseline_mean"),low,high,selection("id","count_distinct","baseline_flights")],"filter":all(vec![phase_filter,baseline,cmp(metric,"not_null",Value::Null)]),"group_by":["progress_pct"],"order_by":[{"field":"progress_pct"}],"limit":500}),zone).await?;
         let mut phases: Vec<f64> = target
             .rows
             .iter()
@@ -804,7 +804,7 @@ async fn battery(
         "discharge_available_flights",
     ));
     sel.push(selection("cycle_count", "count", "known_cycle_flights"));
-    let mut distribution=run(db.clone(),json!({"select":sel,"filter":filter,"group_by":["battery_serial","battery_name"],"order_by":[{"field":"flights","descending":true},{"field":"battery_serial"}],"limit":100,"title":"Discharge distributions by battery"}),zone).await?;
+    let mut distribution=run(db.clone(),json!({"select":sel,"filter":filter,"group_by":["battery_serial","battery_name"],"order_by":[{"field":"flights","descending":true},{"field":"battery_serial"}],"limit":500,"title":"Discharge distributions by battery"}),zone).await?;
     distribution.chart = Some(chart(
         "boxplot",
         "battery_serial",

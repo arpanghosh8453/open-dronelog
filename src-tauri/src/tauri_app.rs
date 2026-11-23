@@ -353,7 +353,7 @@ pub async fn import_log(
     let db = state.db_authenticated()?;
     let parser = LogParser::new(&db);
 
-    let parse_result = match parser.parse_log(&path).await {
+    let mut parse_result = match parser.parse_log(&path).await {
         Ok(result) => result,
         Err(crate::parser::ParserError::AlreadyImported(matching_flight)) => {
             log::info!(
@@ -417,10 +417,14 @@ pub async fn import_log(
 
     log::debug!("Inserting flight metadata: id={}", parse_result.metadata.id);
     let flight_id = db
-        .insert_flight(&parse_result.metadata)
+        .insert_flight_async(parse_result.metadata.clone())
+        .await
         .map_err(|e| format!("Failed to insert flight: {}", e))?;
 
-    let point_count = match db.bulk_insert_telemetry(flight_id, &parse_result.points) {
+    let point_count = match db
+        .bulk_insert_telemetry_async(flight_id, std::mem::take(&mut parse_result.points))
+        .await
+    {
         Ok(count) => count,
         Err(e) => {
             log::error!(
@@ -428,7 +432,7 @@ pub async fn import_log(
                 flight_id,
                 e
             );
-            if let Err(cleanup_err) = db.delete_flight(flight_id) {
+            if let Err(cleanup_err) = db.delete_flight_async(flight_id).await {
                 log::error!("Failed to clean up flight {}: {}", flight_id, cleanup_err);
             }
             return Ok(ImportResult {
@@ -446,7 +450,7 @@ pub async fn import_log(
     let config_path = state.config_path();
     let config = crate::models::load_profile_config(&config_path);
     let profile = database::get_active_profile(&state.data_dir);
-    crate::parser::run_post_import_steps(&db, flight_id, &parse_result, &config, &profile);
+    crate::parser::run_post_import_steps(&db, flight_id, &parse_result, &config, &profile).await;
 
     log::info!(
         "Successfully imported flight {} with {} points in {:.1}s",
@@ -604,7 +608,8 @@ pub async fn create_manual_flight(
     // Insert flight
     state
         .db_authenticated()?
-        .insert_flight(&metadata)
+        .insert_flight_async(metadata.clone())
+        .await
         .map_err(|e| format!("Failed to insert flight: {}", e))?;
 
     // Update notes if provided
@@ -836,7 +841,8 @@ pub async fn delete_flight(flight_id: i64, state: State<'_, AppState>) -> Result
     log::info!("Deleting flight: {}", flight_id);
     state
         .db_authenticated()?
-        .delete_flight(flight_id)
+        .delete_flight_async(flight_id)
+        .await
         .map(|_| true)
         .map_err(|e| format!("Failed to delete flight: {}", e))
 }
@@ -846,7 +852,8 @@ pub async fn delete_all_flights(state: State<'_, AppState>) -> Result<bool, Stri
     log::warn!("Deleting ALL flights and telemetry");
     state
         .db_authenticated()?
-        .delete_all_flights()
+        .delete_all_flights_async()
+        .await
         .map(|_| true)
         .map_err(|e| format!("Failed to delete all flights: {}", e))
 }
@@ -1091,9 +1098,12 @@ pub async fn import_backup(
     emit_backup_progress(&app, "import", 0, "Starting restore");
     state
         .db_authenticated()?
-        .import_backup_with_progress(&path, |percent, stage| {
-            emit_backup_progress(&app, "import", percent, stage);
+        .run_blocking(move |db| {
+            db.import_backup_with_progress(&path, |percent, stage| {
+                emit_backup_progress(&app, "import", percent, stage);
+            })
         })
+        .await
         .map_err(|e| format!("Failed to import backup: {}", e))
 }
 
@@ -1116,11 +1126,16 @@ pub async fn import_backup_bytes(
     std::fs::write(&temp_path, data)
         .map_err(|e| format!("Failed to write temporary restore file: {}", e))?;
 
+    let restore_path = temp_path.clone();
+    let progress_app = app.clone();
     let result = state
         .db_authenticated()?
-        .import_backup_with_progress(&temp_path, |percent, stage| {
-            emit_backup_progress(&app, "import", percent, stage);
+        .run_blocking(move |db| {
+            db.import_backup_with_progress(&restore_path, |percent, stage| {
+                emit_backup_progress(&progress_app, "import", percent, stage);
+            })
         })
+        .await
         .map_err(|e| format!("Failed to import backup: {}", e));
 
     let _ = std::fs::remove_file(&temp_path);

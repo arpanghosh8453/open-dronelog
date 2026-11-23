@@ -1397,6 +1397,12 @@ export async function streamChat(
         }
       }
       if (!terminal && !signal.aborted) throw new Error('Connection ended before the response completed. Retry your message.');
+    } catch (error) {
+      // Parsing/size failures must also stop provider work and release the SSE
+      // response; releasing the reader lock alone leaves the request running.
+      stop();
+      await reader.cancel().catch(() => {});
+      throw error;
     } finally { reader.releaseLock(); }
   } finally { signal.removeEventListener('abort', stop); }
 }

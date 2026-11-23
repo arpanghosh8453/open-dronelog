@@ -246,7 +246,7 @@ impl Server {
         Ok(session)
     }
     pub fn instructions(grant: &storage::Grant) -> String {
-        format!("{} Authorized profile: {}. All date filters and buckets use {}. Each database query is limited to 20 seconds, 500 rows and 512 KB; an MCP tool call has a 60-second deadline. Up to 30 tool calls/minute per connection; one active assistant database query per profile and four across chat/MCP combined. Queries wait up to 10 seconds in a bounded queue; imports take priority. External correction state is isolated by token and analysis_id and expires after 15 idle minutes. Tables and chart specifications are returned as data; interactive rendering depends on the client. No model-provider credentials are needed. MCP does not persist chat history or analysis results.", tools::INSTRUCTIONS, grant.profile, grant.timezone)
+        format!("{} Authorized profile: {}. All date filters and buckets use {}. Each database query is limited to 20 seconds, 500 rows and 512 KB; a complete tool result including all sections and metadata is limited to 900 KB, and an MCP tool call has a 60-second deadline. Up to 30 tool calls/minute per connection; one active assistant database query per profile and four across chat/MCP combined. Queries wait up to 10 seconds in a bounded queue; imports take priority. External correction state is isolated by token and analysis_id and expires after 15 idle minutes. Tables and chart specifications are returned as data; interactive rendering depends on the client. No model-provider credentials are needed. MCP does not persist chat history or analysis results.", tools::INSTRUCTIONS, grant.profile, grant.timezone)
     }
 }
 #[derive(serde::Deserialize)]

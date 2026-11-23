@@ -203,6 +203,25 @@ pub fn revoke(root: &Path, profile: &str, id: Option<&str>) -> Result<(), String
     Ok(())
 }
 
+/// Serialize password changes with token generation. Persist revocation first,
+/// so a failed access-store write cannot leave resurrectable grants behind.
+pub fn change_authorization(
+    root: &Path,
+    profile: &str,
+    change: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let _guard = LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "MCP access unavailable")?;
+    let mut store = read(root)?;
+    store.grants.retain(|grant| grant.profile != profile);
+    if root.join("mcp/access.json").exists() {
+        write(root, &store)?;
+    }
+    change()
+}
+
 pub fn is_current(root: &Path, grant: &Grant) -> Result<bool, String> {
     if grant.profile != "default" {
         crate::database::validate_profile_name(&grant.profile)?;

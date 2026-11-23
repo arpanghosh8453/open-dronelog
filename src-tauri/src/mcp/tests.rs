@@ -112,6 +112,29 @@ fn grants_are_hashed_scoped_expiring_and_never_recoverable_from_status() {
 }
 
 #[test]
+fn removing_password_protection_never_resurrects_old_tokens() {
+    let root = tempfile::tempdir().unwrap();
+    let _default = Database::new(root.path().into(), "default").unwrap();
+    let _other = Database::new(root.path().into(), "other").unwrap();
+    let (old, _) = storage::generate(root.path(), "default", "Before protection", "UTC").unwrap();
+    let (other, _) = storage::generate(root.path(), "other", "Other profile", "UTC").unwrap();
+    crate::profile_auth::set_password(root.path(), "default", "synthetic-password", None).unwrap();
+    assert!(storage::validate(root.path(), &old).is_err());
+    let (protected, _) = storage::generate(root.path(), "default", "Protected", "UTC").unwrap();
+    // Failed password attempts must not revoke a valid grant.
+    assert!(
+        crate::profile_auth::remove_password(root.path(), "default", "wrong-password").is_err()
+    );
+    assert!(storage::validate(root.path(), &protected).is_ok());
+    crate::profile_auth::remove_password(root.path(), "default", "synthetic-password").unwrap();
+    assert!(storage::validate(root.path(), &old).is_err());
+    assert!(storage::validate(root.path(), &protected).is_err());
+    assert!(storage::validate(root.path(), &other).is_ok());
+    let (new, _) = storage::generate(root.path(), "default", "Repaired", "UTC").unwrap();
+    assert!(storage::validate(root.path(), &new).is_ok());
+}
+
+#[test]
 fn password_changes_and_deletion_invalidate_grants() {
     let dir = tempfile::tempdir().unwrap();
     let db = Database::new(dir.path().into(), "work").unwrap();

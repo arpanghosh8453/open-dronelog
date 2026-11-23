@@ -433,7 +433,7 @@ async fn call(
         let value = match outcome {
             Ok(data) => {
                 let text = data.to_string();
-                if text.len() > 900_000 {
+                if text.len() > tools::MAX_RESULT_BYTES {
                     tool_error("Result exceeds the MCP output limit; narrow the query or request fewer sections")
                 } else if resource {
                     json!({"contents":[{"uri":"odl://schema","mimeType":"application/json","text":text}]})
