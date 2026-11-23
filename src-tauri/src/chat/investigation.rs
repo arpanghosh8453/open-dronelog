@@ -112,6 +112,7 @@ fn result(
         chart: None,
         note: note.into(),
         sections: vec![],
+        metadata: None,
     }
 }
 fn chart(kind: &str, x: &str, ys: &[&str], series: Option<&str>) -> Chart {
@@ -177,7 +178,15 @@ struct Compare {
     metrics: Vec<Metric>,
 }
 pub(super) fn metric_unit(metric: &str) -> &'static str {
-    match metric{"duration_secs"=>"seconds","duration_minutes"=>"minutes","duration_hours"=>"hours","distance_km"=>"kilometres","total_distance"|"max_altitude"|"telemetry_height"|"telemetry_altitude"|"telemetry_altitude_abs"|"telemetry_vps_height"=>"metres","max_speed"|"telemetry_speed"|"telemetry_velocity_x"|"telemetry_velocity_y"|"telemetry_velocity_z"=>"metres/second","home_lat"|"home_lon"|"telemetry_latitude"|"telemetry_longitude"|"telemetry_pitch"|"telemetry_roll"|"telemetry_yaw"|"telemetry_gimbal_pitch"|"telemetry_gimbal_roll"|"telemetry_gimbal_yaw"=>"degrees","battery_drain_per_minute"=>"percentage points/minute","battery_max_temperature"|"battery_min_temperature"|"telemetry_battery_temp"=>"Celsius","battery_temperature_outlier_count"|"battery_percent_out_of_range_count"|"battery_nonpositive_voltage_count"=>"count",m if m.contains("voltage")||m.contains("imbalance")=>"volts",m if m.ends_with("_ms")=>"milliseconds",m if m.contains("percent")||m.contains("progress")=>"percent / percentage points",m if m.contains("count")||m=="cycle_count"||m=="telemetry_satellites"=>"count",_=>"See field definition; identifiers/categories have no numeric unit; signal values retain parser-native scales"}
+    match metric{
+        "id"|"flight_id"|"drone_serial"|"battery_serial"|"rc_serial"=>"identifier",
+        "display_name"|"file_name"|"drone_name"|"battery_name"|"aircraft_name"|"notes"|"message_text"=>"text",
+        "drone_model"|"tags"|"color"|"message_type"|"telemetry_flight_mode"=>"category",
+        "telemetry_is_photo"|"telemetry_is_video"=>"boolean",
+        "start_time_epoch_ms"=>"unix_epoch_milliseconds",
+        "photo_count"|"video_count"=>"count",
+        "telemetry_battery_current"|"telemetry_battery_full_capacity"|"telemetry_battery_remained_capacity"|"telemetry_rc_signal"|"telemetry_rc_uplink"|"telemetry_rc_downlink"|"telemetry_gps_signal"=>"parser_native_scale",
+"duration_secs"=>"seconds","duration_minutes"=>"minutes","duration_hours"=>"hours","distance_km"=>"kilometres","total_distance"|"max_altitude"|"telemetry_height"|"telemetry_altitude"|"telemetry_altitude_abs"|"telemetry_vps_height"=>"metres","max_speed"|"telemetry_speed"|"telemetry_velocity_x"|"telemetry_velocity_y"|"telemetry_velocity_z"=>"metres/second","home_lat"|"home_lon"|"telemetry_latitude"|"telemetry_longitude"|"telemetry_pitch"|"telemetry_roll"|"telemetry_yaw"|"telemetry_gimbal_pitch"|"telemetry_gimbal_roll"|"telemetry_gimbal_yaw"=>"degrees","battery_drain_per_minute"=>"percentage points/minute","battery_max_temperature"|"battery_min_temperature"|"telemetry_battery_temp"=>"Celsius","battery_temperature_outlier_count"|"battery_percent_out_of_range_count"|"battery_nonpositive_voltage_count"=>"count",m if m.contains("voltage")||m.contains("imbalance")=>"volts",m if m.ends_with("_ms")=>"milliseconds",m if m.contains("percent")||m.contains("progress")=>"percent / percentage points",m if m.contains("count")||m=="cycle_count"||m=="telemetry_satellites"=>"count",_=>"See field definition; identifiers/categories have no numeric unit; signal values retain parser-native scales"}
 }
 
 fn metric_key(m: &Metric) -> String {

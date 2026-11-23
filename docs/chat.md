@@ -123,3 +123,10 @@ Examples:
 - Compare this flight's battery percentage with earlier flights from the same aircraft, showing the historical baseline band.
 - Show discharge distributions by battery and a scatter plot against cycle count.
 - Build an investigation report with supporting flights, charts, filters and limitations.
+
+
+## Shared analysis safeguards
+
+Chat and external MCP clients use the same validation and result contract. Tool corrections preserve valid predicates and their boolean/message/telemetry scope, and timeline corrections retain the requested flight and elapsed-time bounds. Errors carry stable recovery codes and required constraints. Evidence tables and nested sections retain machine-readable units, coverage, null counts, explicit quality flags and per-query provenance in saved conversations. Older saved results without metadata remain readable.
+
+Assistant SQL shares one process-wide scheduler: one active query per profile, four across chat and MCP, and up to 32 waiting queries with a 10-second queue deadline. Bulk imports, restore and flight deletion take priority over waiting assistant queries. Cancellation removes queued work and interrupts only the active assistant connection; its capacity is released when the worker exits. Specialist tools schedule each component query separately, so multi-section evidence is not one atomic snapshot. See [the MCP result contract](mcp.md#shared-validation-and-result-contract) for metadata and error details.

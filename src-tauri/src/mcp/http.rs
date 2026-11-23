@@ -142,7 +142,11 @@ fn tool_definitions() -> Value {
     Value::Array(tools::definitions().into_iter().map(|tool| json!({"name":tool["name"],"description":tool["description"],"inputSchema":tool["parameters"],"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}})).collect())
 }
 fn tool_error(message: &str) -> Value {
-    json!({"content":[{"type":"text","text":message}],"isError":true})
+    structured_tool_error(tools::ToolError::from(message.to_owned()))
+}
+fn structured_tool_error(error: tools::ToolError) -> Value {
+    let data = error.output();
+    json!({"structuredContent":data,"content":[{"type":"text","text":data.to_string()}],"isError":true})
 }
 fn execution_error(id: Value, message: &str, resource: bool) -> Value {
     if resource {
@@ -370,21 +374,9 @@ async fn call(
             execution_error(id, &error, resource),
         );
     }
-    let Ok(_global) = server.global_slots.clone().try_acquire_owned() else {
-        return reply(
-            StatusCode::TOO_MANY_REQUESTS,
-            execution_error(id, "MCP is busy; retry shortly", resource),
-        );
-    };
-    let Ok(_profile) = server.profile_slots(&grant.profile).try_acquire_owned() else {
-        return reply(
-            StatusCode::TOO_MANY_REQUESTS,
-            execution_error(
-                id,
-                "Another MCP analysis is running for this profile; retry after it finishes",
-                resource,
-            ),
-        );
+    let session = match server.analysis(&grant.id, &args) {
+        Ok(session) => session,
+        Err(error) => return reply(StatusCode::OK, execution_error(id, &error, resource)),
     };
     let (stop, mut stopped) = watch::channel(false);
     let key = job_key(&grant, &id);
@@ -405,7 +397,6 @@ async fn call(
     let (sender, receiver) = oneshot::channel::<Value>();
     tokio::spawn(async move {
         let _job = job;
-        let _slots = (_global, _profile);
         let authorization = || -> Result<(), String> {
             let current = server.authorize(&token)?;
             if current.id != grant.id {
@@ -418,20 +409,27 @@ async fn call(
             Ok(())
         };
         let mut poll = tokio::time::interval(Duration::from_secs(1));
-        let execution = tools::execute(db.clone(), &name, args, &grant.timezone);
+        let execution = async {
+            let mut session = session.try_lock_owned().map_err(|_| tools::ToolError::from("Analysis queue is busy for this analysis_id; retry after its current call finishes".to_owned()))?;
+            session
+                .execute(db.clone(), &name, args, &grant.timezone)
+                .await
+        };
         tokio::pin!(execution);
         let deadline = tokio::time::sleep(Duration::from_secs(60));
         tokio::pin!(deadline);
         let outcome = loop {
             tokio::select! {
                 value = &mut execution => break value.map(|(value,_)|value),
-                _ = stopped.changed() => break Err("MCP request cancelled".into()),
-                _ = &mut deadline => break Err("MCP tool call timed out; narrow the query".into()),
-                _ = poll.tick() => if let Err(error) = authorization() { break Err(error); },
+                _ = stopped.changed() => break Err(tools::ToolError::from("MCP request cancelled".to_owned())),
+                _ = &mut deadline => break Err(tools::ToolError::from("MCP tool call timed out; narrow the query".to_owned())),
+                _ = poll.tick() => if let Err(error) = authorization() { break Err(tools::ToolError::access_denied(error)); },
             }
         };
         // No data leaves the process after revocation, profile switching, or locking.
-        let outcome = authorization().and(outcome);
+        let outcome = authorization()
+            .map_err(tools::ToolError::access_denied)
+            .and(outcome);
         let value = match outcome {
             Ok(data) => {
                 let text = data.to_string();
@@ -443,7 +441,7 @@ async fn call(
                     json!({"structuredContent":data,"content":[{"type":"text","text":text}],"isError":false})
                 }
             }
-            Err(error) => tool_error(&error),
+            Err(error) => structured_tool_error(error),
         };
         let response = if resource && value["isError"] == true {
             rpc_error(

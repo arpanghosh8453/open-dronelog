@@ -140,6 +140,8 @@ pub struct QueryResult {
     pub note: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sections: Vec<QueryResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
 }
 // Expressions are exclusively application-owned. Numeric fields use metric units.
 fn field(name: &str, source: &str, _zone: &str) -> Result<(String, bool), String> {
@@ -677,6 +679,7 @@ pub async fn query(db: Arc<Database>, q: Query, zone: String) -> Result<QueryRes
     let needs_local_time = serde_json::to_string(&q)
         .map_err(|_| "Invalid query")?
         .contains("\"start_time\"");
+    let permit = super::scheduler::acquire(&db).await?;
     let conn = db.analytics_connection()?;
     let interrupt = conn.interrupt_handle();
     // Dropping this future (cancellation/disconnect) interrupts this query only.
@@ -688,6 +691,7 @@ pub async fn query(db: Arc<Database>, q: Query, zone: String) -> Result<QueryRes
     }
     let guard = InterruptOnDrop(interrupt);
     let job = tokio::task::spawn_blocking(move || -> Result<Vec<Value>, String> {
+        let _permit = permit;
         if needs_local_time {
             // Rust ships the IANA timezone database. A private temporary relation avoids
             // downloading/loading DuckDB's ICU extension and preserves DST per flight.
@@ -862,13 +866,15 @@ pub async fn query(db: Arc<Database>, q: Query, zone: String) -> Result<QueryRes
         })
         .collect::<Vec<_>>()
         .join("; ");
-    Ok(QueryResult{id:uuid::Uuid::new_v4().to_string(),title:if q.title.is_empty(){"Flight analysis".into()}else{q.title.clone()},columns:q.select.iter().map(|s|s.alias.clone()).collect(),rows,row_flight_ids,column_meta,truncated,source:q.source.clone(),timezone:zone.clone(),request:serde_json::to_value(&q).unwrap_or(Value::Null),chart:q.chart,sections:vec![],note:format!("Dates and start_time filter boundaries use local wall time in {zone}, not UTC unless that is the specified timezone. Metric units: distance/altitude m, speed m/s, duration s unless a converted field is selected. Telemetry aggregates are sample-weighted and use raw samples; count_distinct(id) counts flights. Missing values remain null. Notes/messages are excerpts (2000 characters); names are limited to 500 characters. Filters search full text. Numeric range buckets show their lower edge; upper edge is exclusive. Selected column units (aliases never convert values): {units}.{map_coverage}")})
+    Ok(QueryResult{id:uuid::Uuid::new_v4().to_string(),title:if q.title.is_empty(){"Flight analysis".into()}else{q.title.clone()},columns:q.select.iter().map(|s|s.alias.clone()).collect(),rows,row_flight_ids,column_meta,truncated,source:q.source.clone(),timezone:zone.clone(),request:serde_json::to_value(&q).unwrap_or(Value::Null),chart:q.chart,sections:vec![],metadata:None,note:format!("Dates and start_time filter boundaries use local wall time in {zone}, not UTC unless that is the specified timezone. Metric units: distance/altitude m, speed m/s, duration s unless a converted field is selected. Telemetry aggregates are sample-weighted and use raw samples; count_distinct(id) counts flights. Missing values remain null. Notes/messages are excerpts (2000 characters); names are limited to 500 characters. Filters search full text. Numeric range buckets show their lower edge; upper edge is exclusive. Selected column units (aliases never convert values): {units}.{map_coverage}")})
 }
 
 /// Schema metadata only: never reads rows from settings, keychains or other tables.
 /// Physical names explain the database; the tool catalog remains the query permission boundary.
 pub async fn schema_context(db: Arc<Database>) -> Result<Value, String> {
+    let permit = super::scheduler::acquire(&db).await?;
     tokio::task::spawn_blocking(move || {
+        let _permit = permit;
         let conn = db.analytics_connection()?;
         let mut statement = conn.prepare("SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema='main' AND table_catalog=current_database() ORDER BY table_name,ordinal_position LIMIT 4097").map_err(|e|e.to_string())?;
         let columns = statement.query_map([], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;

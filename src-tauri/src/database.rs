@@ -36,6 +36,7 @@ pub enum DatabaseError {
 /// Thread-safe database manager
 pub struct Database {
     conn: Mutex<Connection>,
+    pub(crate) workload: std::sync::Arc<crate::chat::scheduler::Workload>,
     pub data_dir: PathBuf,
     pub(crate) profile: String,
 }
@@ -102,6 +103,7 @@ impl Database {
 
         let db = Self {
             conn: Mutex::new(conn),
+            workload: crate::chat::scheduler::workload(&app_data_dir, profile),
             data_dir: app_data_dir,
             profile: profile.to_string(),
         };
@@ -1059,6 +1061,7 @@ impl Database {
 
     /// Insert flight metadata and return the flight ID
     pub fn insert_flight(&self, flight: &FlightMetadata) -> Result<i64, DatabaseError> {
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
@@ -1109,6 +1112,7 @@ impl Database {
         flight_id: i64,
         points: &[TelemetryPoint],
     ) -> Result<usize, DatabaseError> {
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
 
         // Use DuckDB Appender for high-performance bulk inserts
@@ -1686,6 +1690,7 @@ impl Database {
     /// Delete a flight and all associated telemetry data
     pub fn delete_flight(&self, flight_id: i64) -> Result<(), DatabaseError> {
         let start = std::time::Instant::now();
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
 
         conn.execute(
@@ -1715,6 +1720,7 @@ impl Database {
     /// Delete all flights and associated telemetry
     pub fn delete_all_flights(&self) -> Result<(), DatabaseError> {
         let start = std::time::Instant::now();
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
 
         conn.execute("DELETE FROM telemetry", params![])?;
@@ -2228,6 +2234,7 @@ impl Database {
         if messages.is_empty() {
             return Ok(());
         }
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
         // Some logs carry 10,000+ app messages. Inserting them row by row took minutes while
         // holding the profile's connection, stalling every other request for that profile.
@@ -3234,6 +3241,7 @@ impl Database {
             )));
         }
 
+        let _workload = self.workload.write();
         let conn = self.conn.lock().unwrap();
 
         // --- Restore flights ---

@@ -542,3 +542,145 @@ async fn rate_limits_are_per_connection_and_resource_failures_use_rpc_errors() {
         StatusCode::OK
     );
 }
+
+#[test]
+fn invalid_hidden_grants_do_not_consume_quota_after_password_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let _default = Database::new(root.path().into(), "default").unwrap();
+    let _other = Database::new(root.path().into(), "other").unwrap();
+    let mut old = Vec::new();
+    for i in 0..10 {
+        old.push(
+            storage::generate(root.path(), "default", &format!("Client {i}"), "UTC")
+                .unwrap()
+                .0,
+        );
+    }
+    let other = storage::generate(root.path(), "other", "Other client", "UTC")
+        .unwrap()
+        .0;
+    assert!(storage::generate(root.path(), "default", "Exceeds limit", "UTC").is_err());
+    std::fs::write(
+        root.path().join("profile_auth.json"),
+        json!({"default":"changed-password-hash"}).to_string(),
+    )
+    .unwrap();
+    let replacement = storage::generate(root.path(), "default", "Replacement", "UTC")
+        .unwrap()
+        .0;
+    assert!(storage::validate(root.path(), &replacement).is_ok());
+    assert!(storage::validate(root.path(), &other).is_ok());
+    for token in old {
+        assert!(storage::validate(root.path(), &token).is_err());
+    }
+    assert_eq!(storage::inspect(root.path()).unwrap().grants.len(), 2);
+}
+#[tokio::test]
+async fn external_repairs_share_validation_and_isolate_analysis_scopes() {
+    let f = Fixture::new().await;
+    let token = f.token("default");
+    let filter = json!({"kind":"compare","field":"max_altitude","op":"gt","value":100});
+    let bad = json!({"analysis_id":"investigation","select":[{"field":"bad_field","alias":"flight"}],"filter":filter});
+    let (_, failed) = f
+        .request(
+            &token,
+            "tools/call",
+            json!({"name":"query_flights","arguments":bad}),
+        )
+        .await;
+    assert_eq!(
+        failed["result"]["structuredContent"]["error_code"],
+        "invalid_arguments"
+    );
+    let broad =
+        json!({"analysis_id":"investigation","select":[{"field":"display_name","alias":"flight"}]});
+    let (_, denied) = f
+        .request(
+            &token,
+            "tools/call",
+            json!({"name":"query_flights","arguments":broad}),
+        )
+        .await;
+    assert_eq!(
+        denied["result"]["structuredContent"]["error_code"],
+        "constraints_dropped"
+    );
+    let independent =
+        json!({"analysis_id":"independent","select":[{"field":"distance_km","alias":"km"}]});
+    let (_, success) = f
+        .request(
+            &token,
+            "tools/call",
+            json!({"name":"query_flights","arguments":independent}),
+        )
+        .await;
+    assert_eq!(success["result"]["isError"], false);
+    assert_eq!(
+        success["result"]["structuredContent"]["metadata"]["units"]["km"]["unit"],
+        "kilometres"
+    );
+    let fixed = json!({"analysis_id":"investigation","select":[{"field":"display_name","alias":"flight"}],"filter":filter});
+    let (_, success) = f
+        .request(
+            &token,
+            "tools/call",
+            json!({"name":"query_flights","arguments":fixed}),
+        )
+        .await;
+    assert_eq!(success["result"]["isError"], false);
+    assert!(success["result"]["structuredContent"]["rows"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
+async fn chat_and_mcp_wait_for_imports_and_disconnect_cancels_queued_work() {
+    let f = Fixture::new().await;
+    let token = f.token("default");
+    let writer = f.databases["default"].workload.write();
+    let args = json!({"select":[{"field":"distance_km","alias":"distance"}]});
+    // The same Session entry point is used by the built-in chat runtime.
+    let mut chat_session = crate::chat::tools::Session::default();
+    let mut chat = Box::pin(chat_session.execute(
+        f.databases["default"].clone(),
+        "query_flights",
+        args.clone(),
+        "UTC",
+    ));
+    tokio::select! {biased; _=&mut chat=>panic!("chat query must wait for the import"), _=tokio::time::sleep(std::time::Duration::from_millis(30))=>{} }
+    let response=reqwest::Client::new().post(&f.url).bearer_auth(&token).header("accept","application/json, text/event-stream").header("mcp-protocol-version","2025-11-25").json(&json!({"jsonrpc":"2.0","id":"waiting","method":"tools/call","params":{"name":"query_flights","arguments":args}})).send().await.unwrap();
+    assert_eq!(f.server.jobs.lock().unwrap().len(), 1);
+    let mut other_session = crate::chat::tools::Session::default();
+    let other = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        other_session.execute(
+            f.databases["other"].clone(),
+            "query_flights",
+            args.clone(),
+            "UTC",
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(other.0["rows"][0]["distance"], 1.0);
+    drop(response);
+    drop(chat);
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while !f.server.jobs.lock().unwrap().is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    drop(writer);
+    let (_, result) = f
+        .request(
+            &token,
+            "tools/call",
+            json!({"name":"query_flights","arguments":args}),
+        )
+        .await;
+    assert_eq!(result["result"]["isError"], false);
+}

@@ -140,9 +140,11 @@ pub fn generate(
         .lock()
         .map_err(|_| "MCP access unavailable")?;
     let mut store = read(root)?;
+    // Use the same parsed expiry and authorization checks as validation/status.
+    // Invalid grants must not consume invisible quota after a password change.
     store
         .grants
-        .retain(|g| g.expires_at > Utc::now().to_rfc3339());
+        .retain(|g| is_current(root, g).unwrap_or(false));
     if store.grants.len() >= 1000
         || store.grants.iter().filter(|g| g.profile == profile).count() >= 10
     {

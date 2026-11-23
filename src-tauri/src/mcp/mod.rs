@@ -16,7 +16,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::{watch, Semaphore};
+use tokio::sync::watch;
 
 pub type Resolver = Arc<dyn Fn(&str) -> Result<Arc<Database>, String> + Send + Sync>;
 pub const VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26"];
@@ -33,8 +33,7 @@ pub struct Server {
     endpoint: Mutex<Option<String>>,
     shutdown: tokio::sync::Mutex<Option<watch::Sender<bool>>>,
     control: tokio::sync::Mutex<()>,
-    slots: Mutex<HashMap<String, Arc<Semaphore>>>,
-    global_slots: Arc<Semaphore>,
+    analyses: Mutex<HashMap<(String, String), (Instant, Arc<tokio::sync::Mutex<tools::Session>>)>>,
     rates: Mutex<HashMap<String, (Instant, u32)>>,
     jobs: Mutex<HashMap<String, watch::Sender<bool>>>,
 }
@@ -80,8 +79,7 @@ impl Server {
             endpoint: Mutex::new(endpoint),
             shutdown: tokio::sync::Mutex::new(None),
             control: tokio::sync::Mutex::new(()),
-            slots: Mutex::new(HashMap::new()),
-            global_slots: Arc::new(Semaphore::new(4)),
+            analyses: Mutex::new(HashMap::new()),
             rates: Mutex::new(HashMap::new()),
             jobs: Mutex::new(HashMap::new()),
         })
@@ -222,16 +220,33 @@ impl Server {
         entry.1 += 1;
         Ok(())
     }
-    fn profile_slots(&self, profile: &str) -> Arc<Semaphore> {
-        self.slots
+    fn analysis(
+        &self,
+        grant_id: &str,
+        args: &Value,
+    ) -> Result<Arc<tokio::sync::Mutex<tools::Session>>, String> {
+        let id = tools::analysis_id(args)?;
+        let mut analyses = self
+            .analyses
             .lock()
-            .unwrap()
-            .entry(profile.into())
-            .or_insert_with(|| Arc::new(Semaphore::new(1)))
-            .clone()
+            .map_err(|_| "Analysis state unavailable")?;
+        analyses.retain(|_, (used, session)| {
+            used.elapsed() < Duration::from_secs(900) || Arc::strong_count(session) > 1
+        });
+        let key = (grant_id.to_owned(), id.to_owned());
+        if let Some((used, session)) = analyses.get_mut(&key) {
+            *used = Instant::now();
+            return Ok(session.clone());
+        }
+        if analyses.len() >= 256 {
+            return Err("Analysis queue is full; retry after inactive analyses expire".into());
+        }
+        let session = Arc::new(tokio::sync::Mutex::new(tools::Session::default()));
+        analyses.insert(key, (Instant::now(), session.clone()));
+        Ok(session)
     }
     pub fn instructions(grant: &storage::Grant) -> String {
-        format!("{} Authorized profile: {}. All date filters and buckets use {}. Each database query is limited to 20 seconds, 500 rows and 512 KB; an MCP tool call has a 60-second deadline. Up to 30 tool calls/minute per connection; one concurrent call per profile. Tables and chart specifications are returned as data; interactive rendering depends on the client. No model-provider credentials are needed. MCP does not persist chat history or analysis results.", tools::INSTRUCTIONS, grant.profile, grant.timezone)
+        format!("{} Authorized profile: {}. All date filters and buckets use {}. Each database query is limited to 20 seconds, 500 rows and 512 KB; an MCP tool call has a 60-second deadline. Up to 30 tool calls/minute per connection; one active assistant database query per profile and four across chat/MCP combined. Queries wait up to 10 seconds in a bounded queue; imports take priority. External correction state is isolated by token and analysis_id and expires after 15 idle minutes. Tables and chart specifications are returned as data; interactive rendering depends on the client. No model-provider credentials are needed. MCP does not persist chat history or analysis results.", tools::INSTRUCTIONS, grant.profile, grant.timezone)
     }
 }
 #[derive(serde::Deserialize)]
