@@ -233,12 +233,11 @@ If you are using Open Drone Log for a team with multiple drone operators, and wa
     </a>
 </p>
 
-If you are looking for a managed server for your larger team, and need more storage and AI-assisted data analysis for pattern identification and risk management from incident or failures from the captured data, [Zenith hosting](https://zenith.hosting/apps/open-dronelog) is a good choice for a fixed price of **$10/month**. There is no user or log number limit.
+Need more than a shared container? **Hostinger** deploys **Open Drone Log** in one click with dedicated resources, full control panel access, high speed NVMe storage, and networking for fast log imports. You can choose your data center region, lock down access with a built-in firewall, and import logs for all your team members. Your Open Drone Log instance is accessible on the web, via internet, on any device keeping everything centralized and in sync.
 
 <p align="center">
-    <a href="https://zenith.hosting/host/open-dronelog">
-        <img alt="Deploy with Zenith"
-       src="https://cdn.zenith.hosting/buttons/deploy-with-zenith.svg" height="48"/>
+    <a href="https://www.hostg.xyz/aff_c?offer_id=48&amp;aff_id=250039&amp;url_id=7193">
+        <img alt="Deploy on Hostinger" src="https://assets.hostinger.com/vps/deploy.svg" height="48"/>
     </a>
 </p>
 
@@ -685,6 +684,10 @@ While some parts of this codebase were written with AI assistance (Claude Opus 4
         <td align="center">
             <a href="https://opendronelog.zenithdronesolutions.com/">
                 <img src="https://opendronelog.com/sponsors/zenithdronesolutions_dark.png" alt="Zenith Drone Solutions" style="width: 160px; max-width: 100%; height: auto; margin: 8px 12px;" />
+            </a>
+            <br>
+            <a href="https://www.hostg.xyz/aff_c?offer_id=48&amp;aff_id=250039&amp;url_id=7193">
+                <img src="https://opendronelog.com/sponsors/Hostinger_Horizontal_Purple.png" alt="Hostinger" style="width: 160px; max-width: 100%; height: auto; margin: 8px 12px;" />
             </a>
         </td>
         <td align="center"><em>-</em></td>
