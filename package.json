@@ -1,7 +1,7 @@
 {
   "name": "open-dronelog",
   "private": true,
-  "version": "3.3.3",
+  "version": "3.4.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {

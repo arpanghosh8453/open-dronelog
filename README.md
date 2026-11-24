@@ -496,6 +496,8 @@ For production deployments, a reverse proxy with TLS is essential.
 
 The **Chat** tab provides read-only analysis of the current profile using your own OpenAI or OpenAI-compatible API key. Discover models, use their default reasoning behavior, test tool calling, and ask for filtered flight searches, advanced grouped statistics, tables, or bar/line/donut charts. Chat can also explain how to use available features. Credentials and conversations use encrypted storage separate from flight backups in both desktop and Docker deployments.
 
+![Open DroneLog chat interface showing a low-battery warning search with flight results and export controls](screenshots/chat_interface.png)
+
 See the [flight chat guide](docs/chat.md) for setup, privacy, encryption-key persistence, local providers, query semantics and limits.
 
 To test functionality, use an [OpenRouter API key](https://openrouter.ai/settings/keys) with the `openrouter/free` model. Free models have usage limits and variable availability. For regular use and complex analysis, we recommend a funded API key with a paid model for more reliable access and stronger reasoning. The [OpenRouter setup instructions](docs/chat.md#try-it-with-openrouter) show the required connection settings.

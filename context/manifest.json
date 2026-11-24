@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceFingerprints": {
-    "packageJson": "4110c68a66a89b13922b3b2cb7db7e991c9d7b0e42a0eb0ef50a2dc1d9be094c",
+    "packageJson": "3393ca179651f443420e3c320575a8b1d640f19a9b834eb32a382fcda0437541",
     "cargoToml": "d9ed8127084bdf4184b2b0205a209f73a8dfdb48176b9af496b07fdce70ab962",
     "serverRs": "c47d4d884113325826c8c288c248dcd0d858ff2350ab89cef33f0ea39e2783b8",
     "apiTs": "be471c0b0aa095f5b189d88af31ea883a55b58e4052c2a1675d2db07f87c6032",
