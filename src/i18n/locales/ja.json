@@ -18,7 +18,9 @@
     "profileLocked": "プロファイルがロックされています",
     "profileLockedDesc": "このプロファイルはパスワードで保護されています。パスワードを入力して続行するか、別のプロファイルに切り替えてください。",
     "wrongPassword": "パスワードが正しくありません。もう一度お試しください。",
-    "bannerCompact": "Open DroneLogを支援する："
+    "bannerCompact": "支援：",
+    "bannerRemove": "バナーを非表示",
+    "bannerRemoveCompact": "非表示"
   },
   "dashboard": {
     "individual": "フライト",

@@ -18,7 +18,9 @@
     "profileLocked": "Profil Kilitlendi",
     "profileLockedDesc": "Bu profil şifreyle korunmaktadır. Devam etmek için şifreyi girin veya farklı bir profile geçin.",
     "wrongPassword": "Yanlış şifre. Lütfen tekrar deneyin.",
-    "bannerCompact": "Open DroneLog’a destek olun:"
+    "bannerCompact": "Destek olun:",
+    "bannerRemove": "Bannerı kaldır",
+    "bannerRemoveCompact": "Kaldır"
   },
   "dashboard": {
     "individual": "Uçuşlar",

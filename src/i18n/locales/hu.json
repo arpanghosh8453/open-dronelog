@@ -18,7 +18,9 @@
     "profileLocked": "Profil Zárolva",
     "profileLockedDesc": "Ez a profil jelszóval védett. Adja meg a jelszót a folytatáshoz, vagy váltson egy másik profilra.",
     "wrongPassword": "Helytelen jelszó. Kérjük, próbálja újra.",
-    "bannerCompact": "Támogasd az Open DroneLogot itt:"
+    "bannerCompact": "Támogatás itt:",
+    "bannerRemove": "Sáv eltávolítása",
+    "bannerRemoveCompact": "Eltávolítás"
   },
   "dashboard": {
     "individual": "Repülések",

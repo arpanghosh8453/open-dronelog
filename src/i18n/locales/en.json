@@ -18,7 +18,9 @@
     "profileLocked": "Profile Locked",
     "profileLockedDesc": "This profile is password-protected. Enter the password to continue, or switch to a different profile.",
     "wrongPassword": "Incorrect password. Please try again.",
-    "bannerCompact": "Support Open DroneLog on"
+    "bannerCompact": "Support on",
+    "bannerRemove": "Remove banner",
+    "bannerRemoveCompact": "Remove"
   },
   "dashboard": {
     "individual": "Flights",

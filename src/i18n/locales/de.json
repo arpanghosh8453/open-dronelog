@@ -18,7 +18,9 @@
     "profileLocked": "Profil gesperrt",
     "profileLockedDesc": "Dieses Profil ist passwortgeschützt. Geben Sie das Passwort ein, um fortzufahren, oder wechseln Sie zu einem anderen Profil.",
     "wrongPassword": "Falsches Passwort. Bitte versuchen Sie es erneut.",
-    "bannerCompact": "Unterstütze Open DroneLog auf"
+    "bannerCompact": "Unterstützen auf",
+    "bannerRemove": "Banner entfernen",
+    "bannerRemoveCompact": "Entfernen"
   },
   "dashboard": {
     "individual": "Flüge",

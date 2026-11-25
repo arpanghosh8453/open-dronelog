@@ -18,7 +18,9 @@
     "profileLocked": "Profiel vergrendeld",
     "profileLockedDesc": "Dit profiel is beveiligd met een wachtwoord. Voer het wachtwoord in om door te gaan of schakel naar een ander profiel.",
     "wrongPassword": "Onjuist wachtwoord. Probeer het opnieuw.",
-    "bannerCompact": "Steun Open DroneLog op"
+    "bannerCompact": "Steun op",
+    "bannerRemove": "Banner verwijderen",
+    "bannerRemoveCompact": "Verwijderen"
   },
   "dashboard": {
     "individual": "Vluchten",

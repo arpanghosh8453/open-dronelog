@@ -18,7 +18,9 @@
     "profileLocked": "Profil verrouillé",
     "profileLockedDesc": "Ce profil est protégé par mot de passe. Entrez le mot de passe pour continuer ou changez de profil.",
     "wrongPassword": "Mot de passe incorrect. Veuillez réessayer.",
-    "bannerCompact": "Soutenez Open DroneLog sur"
+    "bannerCompact": "Soutenir sur",
+    "bannerRemove": "Retirer la bannière",
+    "bannerRemoveCompact": "Retirer"
   },
   "dashboard": {
     "individual": "Vols",

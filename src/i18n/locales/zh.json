@@ -18,7 +18,9 @@
     "profileLocked": "配置文件已锁定",
     "profileLockedDesc": "此配置文件受密码保护。请输入密码以继续，或切换到其他配置文件。",
     "wrongPassword": "密码不正确。请重试。",
-    "bannerCompact": "支持 Open DroneLog："
+    "bannerCompact": "支持：",
+    "bannerRemove": "移除横幅",
+    "bannerRemoveCompact": "移除"
   },
   "dashboard": {
     "individual": "飞行记录",

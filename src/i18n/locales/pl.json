@@ -18,7 +18,9 @@
     "profileLocked": "Profil zablokowany",
     "profileLockedDesc": "Ten profil jest chroniony hasłem. Wprowadź hasło, aby kontynuować, lub przejdź do innego profilu.",
     "wrongPassword": "Nieprawidłowe hasło. Spróbuj ponownie.",
-    "bannerCompact": "Wesprzyj Open DroneLog na"
+    "bannerCompact": "Wesprzyj na",
+    "bannerRemove": "Usuń baner",
+    "bannerRemoveCompact": "Usuń"
   },
   "dashboard": {
     "individual": "Loty",

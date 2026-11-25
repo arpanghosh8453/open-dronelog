@@ -31,7 +31,7 @@
     "active": true,
     "targets": "all",
     "android": {
-      "versionCode": 3400000
+      "versionCode": 3400001
     },
     "icon": [
       "icons/icon.png",

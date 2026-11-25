@@ -482,12 +482,15 @@ function App() {
         <aside className="support-banner" aria-label={t('settings.supporterBadge')}>
           <div className="support-banner-content">
             <FiHeart aria-hidden="true" />
-            {useCompactBanner ? <p>{t('app.bannerCompact')}{' '}<a className="support-banner-action" href="https://ko-fi.com/arpandesign" target="_blank" rel="noopener noreferrer">Ko-fi</a></p> : <p>
+            {useCompactBanner ? <p>{t('app.bannerCompact')}{' '}<a className="support-banner-action" href="https://ko-fi.com/arpandesign" target="_blank" rel="noopener noreferrer">Ko-Fi</a></p> : <p>
               {t('app.bannerText')}{' '}<a href="https://github.com/arpanghosh8453/open-dronelog" target="_blank" rel="noopener noreferrer">GitHub</a>{' '}{t('app.bannerBy')}
               <span className="support-banner-separator" aria-hidden="true">·</span>
               {t('app.bannerSupport')}{' '}<a className="support-banner-action" href="https://ko-fi.com/arpandesign" target="_blank" rel="noopener noreferrer">Ko-fi</a>
             </p>}
           </div>
+          <a className="support-banner-remove" href="https://opendronelog.com/supporter-badge" target="_blank" rel="noopener noreferrer">
+            {t(useCompactBanner ? 'app.bannerRemoveCompact' : 'app.bannerRemove')}
+          </a>
         </aside>
       )}
       {/* Error Toast */}

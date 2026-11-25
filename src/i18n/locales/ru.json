@@ -18,7 +18,9 @@
     "profileLocked": "Профиль заблокирован",
     "profileLockedDesc": "Этот профиль защищён паролем. Введите пароль, чтобы продолжить, или переключитесь на другой профиль.",
     "wrongPassword": "Неверный пароль. Попробуйте ещё раз.",
-    "bannerCompact": "Поддержите Open DroneLog на"
+    "bannerCompact": "Поддержать на",
+    "bannerRemove": "Убрать баннер",
+    "bannerRemoveCompact": "Убрать"
   },
   "dashboard": {
     "individual": "Полёты",
