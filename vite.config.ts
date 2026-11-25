@@ -60,9 +60,7 @@ export default defineConfig({
       ? 'es2022'
       : process.env.TAURI_ENV_PLATFORM === 'windows' 
       ? 'chrome105' 
-      : process.env.TAURI_ENV_PLATFORM === 'macos'
-      ? 'safari14'
-      : 'chrome105',
+      : 'safari13',
     // Don't minify for debug builds
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
